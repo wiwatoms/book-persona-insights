@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,6 +46,15 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
     }
   }, []);
 
+  // Define addToLog function first
+  const addToLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${message}`;
+    console.log(logEntry);
+    setDetailedLog(prev => [...prev.slice(-50), logEntry]); // Keep last 50 entries
+    setCurrentStatus(message);
+  };
+
   // Split text into chunks for progressive analysis
   const textChunks = React.useMemo(() => {
     if (!pdfContent || pdfContent.length < 100) {
@@ -74,14 +82,6 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
   const totalSteps = archetypes.length * textChunks.length;
   const currentStep = currentArchetypeIndex * textChunks.length + currentChunkIndex;
   const progressPercentage = totalSteps > 0 ? (currentStep / totalSteps) * 100 : 0;
-
-  const addToLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const logEntry = `[${timestamp}] ${message}`;
-    console.log(logEntry);
-    setDetailedLog(prev => [...prev.slice(-50), logEntry]); // Keep last 50 entries
-    setCurrentStatus(message);
-  };
 
   const callOpenAIAPI = async (archetype: ReaderArchetype, chunk: string, chunkIndex: number): Promise<AnalysisResult> => {
     if (!aiConfig) throw new Error('AI configuration missing');
