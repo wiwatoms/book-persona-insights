@@ -6,9 +6,6 @@ import { Upload, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Set up the worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-
 interface PdfUploaderProps {
   onPdfUploaded: (content: string) => void;
 }
@@ -33,6 +30,11 @@ export const PdfUploader: React.FC<PdfUploaderProps> = ({ onPdfUploaded }) => {
     }
 
     if (file.type === 'application/pdf') {
+      // Set up the worker when we actually need it
+      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`;
+      }
+
       // Handle PDF files using PDF.js
       try {
         const arrayBuffer = await file.arrayBuffer();
