@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,53 +18,53 @@ interface ArchetypeManagerProps {
 const DEFAULT_ARCHETYPES: ReaderArchetype[] = [
   {
     id: '1',
-    name: 'Der pragmatische Entscheider',
-    description: 'Business-orientierte Führungskraft, die konkrete Lösungen und praktische Anwendbarkeit sucht',
-    demographics: '35-50 Jahre, Führungsposition, akademischer Hintergrund',
-    readingPreferences: 'Effizienz-orientiert, überspringt Details, fokussiert auf Kernaussagen',
-    personalityTraits: ['Analytisch', 'Ungeduldig', 'Ergebnisorientiert', 'Skeptisch'],
-    motivations: ['Beruflicher Erfolg', 'Zeiteffizienz', 'Praktische Lösungen'],
-    painPoints: ['Zeitdruck', 'Informationsüberfluss', 'Unklare Handlungsempfehlungen']
+    name: 'Der Reisende & Interkulturell Interessierte',
+    description: 'Bildungsbürger zwischen 30-60 Jahren, der authentische Einblicke in fremde Kulturen sucht und GEO, ZEIT oder National Geographic liest',
+    demographics: '30-60 Jahre, höhere Bildung, Vielreiser, kulturell aufgeschlossen',
+    readingPreferences: 'Sucht kulturelle Tiefe, politische Entwicklungen, authentisches Alltagsleben. Bevorzugt atmosphärische Beschreibungen und kulturelle Details',
+    personalityTraits: ['Weltgewandt', 'Neugierig', 'Reflektiert', 'Tolerant', 'Analytisch'],
+    motivations: ['Kulturelles Verständnis', 'Horizonterweiterung', 'Authentische Perspektiven', 'Vorbereitung eigener Reisen'],
+    painPoints: ['Oberflächliche Darstellungen', 'Klischeehafte Beschreibungen', 'Mangelnde Authentizität', 'Westliche Überheblichkeit']
   },
   {
     id: '2',
-    name: 'Die wissbegierige Entdeckerin',
-    description: 'Akademisch interessierte Person, die tiefes Verständnis und neue Perspektiven sucht',
-    demographics: '25-40 Jahre, Universitätsabschluss, beruflich oder privat lernorientiert',
-    readingPreferences: 'Gründlich, analytisch, hinterfragt Aussagen, sammelt Referenzen',
-    personalityTraits: ['Neugierig', 'Gründlich', 'Kritisch', 'Reflektiert'],
-    motivations: ['Wissenserweiterung', 'Persönliche Entwicklung', 'Verstehen komplexer Zusammenhänge'],
-    painPoints: ['Oberflächliche Darstellung', 'Fehlende Quellenangaben', 'Widersprüchliche Informationen']
+    name: 'Der Literarisch Interessierte Leser',
+    description: 'Anspruchsvolle Leser:in zwischen 35-65 Jahren, die Suhrkamp, Hanser oder Fischer schätzt und Wert auf literarische Qualität legt',
+    demographics: '35-65 Jahre, Universitätsabschluss, regelmäßige Buchkäufer, literarisch gebildet',
+    readingPreferences: 'Schätzt sprachliche Finesse, Symbolik, vielschichtige Charaktere. Erwartet gesellschaftliche Relevanz und literarischen Anspruch',
+    personalityTraits: ['Intellektuell', 'Ästhetisch sensibel', 'Geduldig', 'Kritisch', 'Sprachbewusst'],
+    motivations: ['Literarischer Genuss', 'Sprachliche Schönheit', 'Gesellschaftliche Reflexion', 'Kulturelle Bildung'],
+    painPoints: ['Triviale Sprache', 'Oberflächliche Charaktere', 'Mangelnde literarische Tiefe', 'Vorhersehbare Handlung']
   },
   {
     id: '3',
-    name: 'Der emotionale Suchende',
-    description: 'Person in einer Lebensphase des Wandels, die Inspiration und emotionale Verbindung sucht',
-    demographics: '30-55 Jahre, persönliche oder berufliche Veränderungsphase',
-    readingPreferences: 'Emotional ansprechend, Geschichte-orientiert, sucht persönliche Relevanz',
-    personalityTraits: ['Empathisch', 'Hoffnungsvoll', 'Verletzlich', 'Inspirationssuchend'],
-    motivations: ['Persönliche Transformation', 'Hoffnung finden', 'Nicht allein sein'],
-    painPoints: ['Gefühl der Überforderung', 'Mangel an emotionaler Unterstützung', 'Unrealistische Versprechen']
+    name: 'Der Junge Weltversteher',
+    description: 'Zukunftsoptimist zwischen 20-35 Jahren mit Interesse an globalem Denken, Feminismus und Identitätsfragen, aktiv auf BookTok und Podcasts',
+    demographics: '20-35 Jahre, digital native, sozial engagiert, diversitätsbewusst',
+    readingPreferences: 'Konsumiert über BookTok, Podcasts, Spiegel Bestseller. Sucht Perspektivenvielfalt und gesellschaftliche Relevanz',
+    personalityTraits: ['Progressiv', 'Empathisch', 'Digital vernetzt', 'Aktivistisch', 'Identitätsbewusst'],
+    motivations: ['Gesellschaftlichen Wandel verstehen', 'Feministische Perspektiven', 'Globale Gerechtigkeit', 'Identitätsfindung'],
+    painPoints: ['Veraltete Denkweisen', 'Mangelnde Diversität', 'Patriarchale Strukturen', 'Kulturelle Ignoranz']
   },
   {
     id: '4',
-    name: 'Der skeptische Realitätsprüfer',
-    description: 'Erfahrene Person, die bereits viele Ratgeber gelesen hat und kritisch prüft',
-    demographics: '40-65 Jahre, erfahren in der Branche/im Thema, gebildet',
-    readingPreferences: 'Kritisch, vergleicht mit bekannten Konzepten, sucht Originalität',
-    personalityTraits: ['Skeptisch', 'Erfahren', 'Anspruchsvoll', 'Direkt'],
-    motivations: ['Wirklich neue Erkenntnisse', 'Bestätigung/Widerlegung bestehender Annahmen'],
-    painPoints: ['Wiederholung bekannter Inhalte', 'Oberflächlichkeit', 'Marketing-Sprech']
+    name: 'Der Migrationserfahrene & Orientverbundene',
+    description: 'Deutsch-arabisch sozialisierte Person, die sich mit Themen wie Heimat, kulturellem Wandel und Identität zwischen den Welten auseinandersetzt',
+    demographics: 'Vielschichtige Altersgruppe, Migrationshintergrund, mehrsprachig, kulturell hybrid',
+    readingPreferences: 'Sucht persönlichen Zugang, Perspektivwechsel, authentische Darstellung der eigenen Kultur ohne Exotisierung',
+    personalityTraits: ['Kulturell hybrid', 'Identitätssuchend', 'Authentizitätsbewusst', 'Empfindlich', 'Differenziert'],
+    motivations: ['Kulturelle Repräsentation', 'Identitätsklärung', 'Heimatgefühl', 'Brückenbau zwischen Kulturen'],
+    painPoints: ['Klischees und Stereotypen', 'Exotisierung', 'Vereinfachung komplexer Identitäten', 'Westlicher Blick']
   },
   {
     id: '5',
-    name: 'Der überforderter Anfänger',
-    description: 'Person, die neu im Themenbereich ist und klare, einfache Anleitung benötigt',
-    demographics: '20-35 Jahre, wenig Vorerfahrung, sucht ersten Einstieg',
-    readingPreferences: 'Strukturiert, schrittweise, braucht viele Beispiele und Erklärungen',
-    personalityTraits: ['Unsicher', 'Lernwillig', 'Überwältigt', 'Hoffnungsvoll'],
-    motivations: ['Erste Schritte verstehen', 'Selbstvertrauen aufbauen', 'Schnelle Erfolgserlebnisse'],
-    painPoints: ['Komplexität', 'Fachbegriffe', 'Mangel an konkreten Beispielen']
+    name: 'Der Politisch Engagierte Bildungsbürger',
+    description: 'Zwischen 30-70 Jahren, interessiert an Transformationsprozessen, Feminismus im Islam, Umwelt und Gesellschaft, liest politische Literatur und Essays',
+    demographics: '30-70 Jahre, politisch interessiert, gesellschaftlich engagiert, informiert',
+    readingPreferences: 'Konsumiert politische Literatur, Essays, Reportagen. Erwartet fundierte Analyse gesellschaftlicher Prozesse',
+    personalityTraits: ['Politisch bewusst', 'Gesellschaftskritisch', 'Informiert', 'Engagiert', 'Meinungsbildend'],
+    motivations: ['Gesellschaftliche Transformation verstehen', 'Politische Bildung', 'Feministische Perspektiven', 'Umweltbewusstsein'],
+    painPoints: ['Unpolitische Darstellung', 'Oberflächliche Analyse', 'Mangelnde Gesellschaftskritik', 'Fehlende Lösungsansätze']
   }
 ];
 

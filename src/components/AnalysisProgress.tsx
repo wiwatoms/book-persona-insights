@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ReaderArchetype, AnalysisResult } from './BookAnalyzer';
-import { Play, Pause, RotateCcw, Brain, Clock } from 'lucide-react';
+import { AIAnalysisService, AIConfig } from './AIAnalysisService';
+import { Play, Pause, RotateCcw, Brain, Clock, AlertCircle, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface AnalysisProgressProps {
@@ -23,15 +25,28 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
   isAnalyzing,
   setIsAnalyzing
 }) => {
+  const [aiConfig, setAIConfig] = useState<AIConfig | null>(null);
   const [currentArchetypeIndex, setCurrentArchetypeIndex] = useState(0);
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [isPaused, setIsPaused] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState<string>('');
+  const [detailedLog, setDetailedLog] = useState<string[]>([]);
+  const [estimatedTime, setEstimatedTime] = useState<number>(0);
   const { toast } = useToast();
+
+  // Check for existing config on component mount
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem('openai_api_key');
+    const savedModel = localStorage.getItem('openai_model');
+    if (savedApiKey && savedModel) {
+      setAIConfig({ apiKey: savedApiKey, model: savedModel });
+    }
+  }, []);
 
   // Split text into chunks for progressive analysis
   const textChunks = React.useMemo(() => {
-    const wordsPerChunk = 500;
+    const wordsPerChunk = 300; // Smaller chunks for better analysis
     const words = pdfContent.split(' ');
     const chunks = [];
     
@@ -46,179 +61,150 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
   const currentStep = currentArchetypeIndex * textChunks.length + currentChunkIndex;
   const progressPercentage = (currentStep / totalSteps) * 100;
 
-  const simulateArchetypeAnalysis = async (
-    archetype: ReaderArchetype, 
-    chunk: string, 
-    chunkIndex: number
-  ): Promise<AnalysisResult> => {
-    // Simulate analysis time
-    await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
-    
-    // Generate realistic simulation data based on archetype characteristics
-    const generateRating = (base: number, variance: number = 0.2) => {
-      return Math.max(1, Math.min(5, base + (Math.random() - 0.5) * variance * 2));
-    };
+  const addToLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDetailedLog(prev => [...prev, `[${timestamp}] ${message}`]);
+    setCurrentStatus(message);
+  };
 
-    let ratings;
-    let overallRating;
-    let buyingProbability;
-    let recommendationLikelihood;
-    let expectedReviewSentiment: 'positive' | 'neutral' | 'negative';
-    let feedback;
-    let marketingInsights;
+  const callOpenAIAPI = async (archetype: ReaderArchetype, chunk: string, chunkIndex: number): Promise<AnalysisResult> => {
+    if (!aiConfig) throw new Error('AI configuration missing');
 
-    // Customize analysis based on archetype
-    switch (archetype.id) {
-      case '1': // Pragmatischer Entscheider
-        ratings = {
-          engagement: generateRating(3.5, 0.3),
-          style: generateRating(3.8, 0.2),
-          clarity: generateRating(4.2, 0.3),
-          pacing: generateRating(3.9, 0.4),
-          relevance: generateRating(4.0, 0.3)
-        };
-        overallRating = (ratings.engagement + ratings.clarity + ratings.relevance) / 3;
-        buyingProbability = overallRating > 3.5 ? 0.7 + Math.random() * 0.2 : 0.3 + Math.random() * 0.3;
-        recommendationLikelihood = buyingProbability > 0.6 ? 0.6 + Math.random() * 0.3 : 0.2 + Math.random() * 0.4;
-        expectedReviewSentiment = overallRating > 3.8 ? 'positive' : overallRating > 3.2 ? 'neutral' : 'negative';
-        feedback = `Abschnitt ${chunkIndex + 1}: Der Text ist ${overallRating > 3.5 ? 'praxisnah und umsetzbar' : 'zu theoretisch'}. ${
-          ratings.clarity > 4 ? 'Klare Struktur erkennbar.' : 'Mehr konkrete Handlungsempfehlungen nötig.'
-        }`;
-        marketingInsights = [
-          'Fokus auf messbare Ergebnisse hervorheben',
-          'Case Studies und Praxisbeispiele betonen',
-          'Zeitersparnis als Hauptnutzen kommunizieren'
-        ];
-        break;
+    addToLog(`Analysiere Textabschnitt ${chunkIndex + 1} für ${archetype.name}...`);
 
-      case '2': // Wissbegierige Entdeckerin
-        ratings = {
-          engagement: generateRating(4.1, 0.3),
-          style: generateRating(4.3, 0.2),
-          clarity: generateRating(4.0, 0.3),
-          pacing: generateRating(3.7, 0.3),
-          relevance: generateRating(4.2, 0.2)
-        };
-        overallRating = (ratings.engagement + ratings.style + ratings.relevance) / 3;
-        buyingProbability = overallRating > 4.0 ? 0.8 + Math.random() * 0.15 : 0.5 + Math.random() * 0.3;
-        recommendationLikelihood = buyingProbability > 0.7 ? 0.8 + Math.random() * 0.2 : 0.4 + Math.random() * 0.4;
-        expectedReviewSentiment = overallRating > 4.0 ? 'positive' : overallRating > 3.5 ? 'neutral' : 'negative';
-        feedback = `Kapitel ${chunkIndex + 1}: ${overallRating > 4.0 ? 'Intellectuell ansprechend' : 'Benötigt mehr Tiefe'}. ${
-          ratings.style > 4 ? 'Gut recherchiert und fundiert.' : 'Mehr wissenschaftliche Belege wünschenswert.'
-        }`;
-        marketingInsights = [
-          'Akademische Credentials hervorheben',
-          'Quellenverzeichnis und Referenzen betonen',
-          'Komplexität als Stärke positionieren'
-        ];
-        break;
+    const prompt = `Du bist ein Experte für Literaturanalyse und verhältst dich wie folgende Persona:
 
-      case '3': // Emotionaler Suchender
-        ratings = {
-          engagement: generateRating(4.2, 0.4),
-          style: generateRating(3.9, 0.3),
-          clarity: generateRating(3.6, 0.3),
-          pacing: generateRating(4.0, 0.3),
-          relevance: generateRating(4.4, 0.3)
-        };
-        overallRating = (ratings.engagement + ratings.relevance + ratings.pacing) / 3;
-        buyingProbability = overallRating > 4.0 ? 0.75 + Math.random() * 0.2 : 0.4 + Math.random() * 0.4;
-        recommendationLikelihood = buyingProbability > 0.6 ? 0.85 + Math.random() * 0.15 : 0.3 + Math.random() * 0.5;
-        expectedReviewSentiment = overallRating > 4.0 ? 'positive' : overallRating > 3.3 ? 'neutral' : 'negative';
-        feedback = `Teil ${chunkIndex + 1}: ${overallRating > 3.8 ? 'Emotional berührend und inspirierend' : 'Fehlt emotionale Verbindung'}. ${
-          ratings.relevance > 4 ? 'Spricht persönliche Herausforderungen an.' : 'Mehr persönliche Geschichten benötigt.'
-        }`;
-        marketingInsights = [
-          'Transformation stories hervorheben',
-          'Emotionale Testimonials nutzen',
-          'Gemeinschaftsgefühl aufbauen'
-        ];
-        break;
+PERSONA: ${archetype.name}
+BESCHREIBUNG: ${archetype.description}
+DEMOGRAPHIK: ${archetype.demographics}
+LESEGEWOHNHEITEN: ${archetype.readingPreferences}
+PERSÖNLICHKEIT: ${archetype.personalityTraits.join(', ')}
+MOTIVATIONEN: ${archetype.motivations.join(', ')}
+PAIN POINTS: ${archetype.painPoints.join(', ')}
 
-      case '4': // Skeptischer Realitätsprüfer
-        ratings = {
-          engagement: generateRating(3.2, 0.4),
-          style: generateRating(3.4, 0.3),
-          clarity: generateRating(3.8, 0.3),
-          pacing: generateRating(3.3, 0.3),
-          relevance: generateRating(3.1, 0.4)
-        };
-        overallRating = (ratings.engagement + ratings.style + ratings.relevance) / 3;
-        buyingProbability = overallRating > 3.5 ? 0.4 + Math.random() * 0.3 : 0.1 + Math.random() * 0.3;
-        recommendationLikelihood = buyingProbability > 0.5 ? 0.3 + Math.random() * 0.4 : 0.1 + Math.random() * 0.2;
-        expectedReviewSentiment = overallRating > 3.6 ? 'neutral' : 'negative';
-        feedback = `Abschnitt ${chunkIndex + 1}: ${overallRating > 3.3 ? 'Akzeptabel, aber wenig Neues' : 'Zu oberflächlich und bekannt'}. ${
-          ratings.clarity > 3.5 ? 'Wenigstens klar strukturiert.' : 'Unklare Argumentation.'
-        }`;
-        marketingInsights = [
-          'Unique Selling Points deutlicher herausarbeiten',
-          'Kritische Stimmen ernst nehmen',
-          'Beweise für Wirksamkeit liefern'
-        ];
-        break;
+Analysiere den folgenden Textabschnitt (Teil ${chunkIndex + 1}) aus der Perspektive dieser Persona:
 
-      case '5': // Überforderter Anfänger
-        ratings = {
-          engagement: generateRating(3.8, 0.5),
-          style: generateRating(3.2, 0.4),
-          clarity: generateRating(2.9, 0.5),
-          pacing: generateRating(2.8, 0.4),
-          relevance: generateRating(4.1, 0.3)
-        };
-        overallRating = (ratings.engagement + ratings.clarity + ratings.relevance) / 3;
-        buyingProbability = overallRating > 3.5 ? 0.6 + Math.random() * 0.3 : 0.2 + Math.random() * 0.4;
-        recommendationLikelihood = buyingProbability > 0.5 ? 0.4 + Math.random() * 0.4 : 0.1 + Math.random() * 0.3;
-        expectedReviewSentiment = overallRating > 3.5 ? 'positive' : overallRating > 2.8 ? 'neutral' : 'negative';
-        feedback = `Kapitel ${chunkIndex + 1}: ${overallRating > 3.2 ? 'Hilfreich für Einsteiger' : 'Zu kompliziert für Anfänger'}. ${
-          ratings.clarity < 3 ? 'Mehr Erklärungen und Beispiele nötig.' : 'Gut verständlich geschrieben.'
-        }`;
-        marketingInsights = [
-          'Schritt-für-Schritt Anleitung betonen',
-          'Einfachheit als Hauptmerkmal bewerben',
-          'Unterstützung und Begleitung anbieten'
-        ];
-        break;
+"${chunk}"
 
-      default:
-        // Fallback
-        ratings = {
-          engagement: generateRating(3.5),
-          style: generateRating(3.5),
-          clarity: generateRating(3.5),
-          pacing: generateRating(3.5),
-          relevance: generateRating(3.5)
-        };
-        overallRating = 3.5;
-        buyingProbability = 0.5;
-        recommendationLikelihood = 0.5;
-        expectedReviewSentiment = 'neutral';
-        feedback = 'Standard-Bewertung';
-        marketingInsights = ['Standard-Insight'];
+Bewerte auf einer Skala von 1-5 (Dezimalstellen erlaubt):
+- Engagement: Wie fesselnd ist der Text?
+- Stil: Wie gefällt dir der Schreibstil?
+- Klarheit: Wie verständlich ist der Text?
+- Tempo: Wie ist das Erzähltempo?
+- Relevanz: Wie relevant ist der Inhalt für dich?
+
+Schätze außerdem (0-1 als Dezimalzahl):
+- Kaufwahrscheinlichkeit: Würdest du das Buch kaufen?
+- Weiterempfehlungswahrscheinlichkeit: Würdest du es weiterempfehlen?
+
+Bestimme die erwartete Review-Stimmung: positive, neutral oder negative
+
+Gib 2-3 Marketing-Insights basierend auf deiner Persona-Perspektive.
+
+Antworte ausschließlich in folgendem JSON-Format:
+{
+  "ratings": {
+    "engagement": 0.0,
+    "style": 0.0,
+    "clarity": 0.0,
+    "pacing": 0.0,
+    "relevance": 0.0
+  },
+  "overallRating": 0.0,
+  "feedback": "Dein detailliertes Feedback als Persona",
+  "buyingProbability": 0.0,
+  "recommendationLikelihood": 0.0,
+  "expectedReviewSentiment": "positive/neutral/negative",
+  "marketingInsights": ["Insight 1", "Insight 2", "Insight 3"]
+}`;
+
+    try {
+      addToLog(`Sende Anfrage an OpenAI (${aiConfig.model})...`);
+      
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${aiConfig.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: aiConfig.model,
+          messages: [
+            {
+              role: 'system',
+              content: 'Du bist ein Experte für Literaturanalyse. Antworte ausschließlich in gültigem JSON-Format.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`OpenAI API Error: ${response.status} - ${errorData}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+      
+      addToLog(`Antwort erhalten, verarbeite JSON...`);
+      
+      // Clean up the response - sometimes there's extra text
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('Keine gültige JSON-Antwort erhalten');
+      }
+
+      const analysisData = JSON.parse(jsonMatch[0]);
+      
+      addToLog(`✓ Analyse abgeschlossen für ${archetype.name}, Abschnitt ${chunkIndex + 1}`);
+
+      return {
+        archetypeId: archetype.id,
+        chunkIndex,
+        ratings: analysisData.ratings,
+        overallRating: analysisData.overallRating,
+        feedback: analysisData.feedback,
+        buyingProbability: analysisData.buyingProbability,
+        recommendationLikelihood: analysisData.recommendationLikelihood,
+        expectedReviewSentiment: analysisData.expectedReviewSentiment,
+        marketingInsights: analysisData.marketingInsights
+      };
+    } catch (error) {
+      addToLog(`❌ Fehler bei der Analyse: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`);
+      throw error;
     }
-
-    return {
-      archetypeId: archetype.id,
-      chunkIndex,
-      ratings: {
-        engagement: Math.round(ratings.engagement * 10) / 10,
-        style: Math.round(ratings.style * 10) / 10,
-        clarity: Math.round(ratings.clarity * 10) / 10,
-        pacing: Math.round(ratings.pacing * 10) / 10,
-        relevance: Math.round(ratings.relevance * 10) / 10
-      },
-      overallRating: Math.round(overallRating * 10) / 10,
-      feedback,
-      buyingProbability: Math.round(buyingProbability * 100) / 100,
-      recommendationLikelihood: Math.round(recommendationLikelihood * 100) / 100,
-      expectedReviewSentiment,
-      marketingInsights
-    };
   };
 
   const startAnalysis = async () => {
+    if (!aiConfig) {
+      toast({
+        title: "Konfiguration fehlt",
+        description: "Bitte konfigurieren Sie zuerst die OpenAI API.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsAnalyzing(true);
     setIsPaused(false);
     setAnalysisResults([]);
+    setDetailedLog([]);
+    setCurrentArchetypeIndex(0);
+    setCurrentChunkIndex(0);
+    
+    // Estimate total time
+    const totalAnalyses = archetypes.length * textChunks.length;
+    const estimatedTimeInMinutes = Math.ceil(totalAnalyses * 0.5); // ~30 seconds per analysis
+    setEstimatedTime(estimatedTimeInMinutes);
+    
+    addToLog(`🚀 Starte Analyse: ${archetypes.length} Archetypen × ${textChunks.length} Textabschnitte = ${totalAnalyses} Analysen`);
+    addToLog(`⏱️ Geschätzte Dauer: ${estimatedTimeInMinutes} Minuten`);
     
     const results: AnalysisResult[] = [];
 
@@ -228,6 +214,7 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
         
         setCurrentArchetypeIndex(archetypeIdx);
         const archetype = archetypes[archetypeIdx];
+        addToLog(`📚 Beginne Analyse für: ${archetype.name}`);
 
         for (let chunkIdx = 0; chunkIdx < textChunks.length; chunkIdx++) {
           if (!isAnalyzing || isPaused) break;
@@ -235,13 +222,20 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
           setCurrentChunkIndex(chunkIdx);
           const chunk = textChunks[chunkIdx];
 
-          const result = await simulateArchetypeAnalysis(archetype, chunk, chunkIdx);
-          results.push(result);
-          setAnalysisResults([...results]);
+          try {
+            const result = await callOpenAIAPI(archetype, chunk, chunkIdx);
+            results.push(result);
+            setAnalysisResults([...results]);
+          } catch (error) {
+            addToLog(`❌ Fehler bei Abschnitt ${chunkIdx + 1}: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`);
+            // Continue with next chunk instead of stopping completely
+            continue;
+          }
         }
       }
 
       if (!isPaused && isAnalyzing) {
+        addToLog(`🎉 Analyse erfolgreich abgeschlossen! ${results.length} Bewertungen erstellt.`);
         onAnalysisComplete(results);
         toast({
           title: "Analyse abgeschlossen",
@@ -249,9 +243,10 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
         });
       }
     } catch (error) {
+      addToLog(`💥 Kritischer Fehler: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`);
       toast({
         title: "Analyse-Fehler",
-        description: "Beim Analysieren ist ein Fehler aufgetreten.",
+        description: "Beim Analysieren ist ein kritischer Fehler aufgetreten.",
         variant: "destructive",
       });
     } finally {
@@ -260,24 +255,25 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
   };
 
   const pauseAnalysis = () => {
+    addToLog("⏸️ Analyse pausiert");
     setIsPaused(true);
     setIsAnalyzing(false);
   };
 
   const resetAnalysis = () => {
+    addToLog("🔄 Analyse zurückgesetzt");
     setIsAnalyzing(false);
     setIsPaused(false);
     setCurrentArchetypeIndex(0);
     setCurrentChunkIndex(0);
     setAnalysisResults([]);
+    setDetailedLog([]);
+    setCurrentStatus('');
   };
 
-  const estimatedTimeRemaining = () => {
-    const remainingSteps = totalSteps - currentStep;
-    const averageTimePerStep = 2; // seconds
-    const remainingMinutes = Math.ceil((remainingSteps * averageTimePerStep) / 60);
-    return remainingMinutes;
-  };
+  if (!aiConfig) {
+    return <AIAnalysisService onConfigured={setAIConfig} />;
+  }
 
   return (
     <div className="space-y-6">
@@ -290,7 +286,7 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">{archetypes.length}</div>
               <div className="text-sm text-slate-600">Archetypen</div>
@@ -301,11 +297,25 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">{totalSteps}</div>
-              <div className="text-sm text-slate-600">Gesamt-Bewertungen</div>
+              <div className="text-sm text-slate-600">Gesamt-Analysen</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">~{estimatedTime}min</div>
+              <div className="text-sm text-slate-600">Geschätzte Dauer</div>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Current Status */}
+      {currentStatus && (
+        <Alert className="bg-blue-50 border-blue-200">
+          <CheckCircle className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-blue-800">
+            {currentStatus}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Progress Section */}
       {(isAnalyzing || analysisResults.length > 0) && (
@@ -316,7 +326,7 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
               {isAnalyzing && (
                 <div className="flex items-center gap-2 text-sm text-slate-600">
                   <Clock className="w-4 h-4" />
-                  ~{estimatedTimeRemaining()} Min verbleibend
+                  {Math.round(progressPercentage)}% abgeschlossen
                 </div>
               )}
             </CardTitle>
@@ -359,10 +369,22 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
                           <Badge variant="secondary">{archetype?.name}</Badge>
                           <span className="font-medium">{result.overallRating}/5 ⭐</span>
                         </div>
-                        <p className="text-slate-600">{result.feedback}</p>
+                        <p className="text-slate-600">{result.feedback.substring(0, 100)}...</p>
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* Detailed Log */}
+            {detailedLog.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium">Analyse-Log:</h4>
+                <div className="bg-black text-green-400 p-4 rounded font-mono text-xs max-h-32 overflow-y-auto">
+                  {detailedLog.slice(-10).map((log, idx) => (
+                    <div key={idx}>{log}</div>
+                  ))}
                 </div>
               </div>
             )}
