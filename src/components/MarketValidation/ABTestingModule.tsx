@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { Trophy, Target, TrendingUp, Users } from 'lucide-react';
-import { ReaderPersona } from '../BookAnalyzer';
+import { ReaderPersona } from './types';
 import { useBookContext } from './BookContextProvider';
 import { AIProcessor } from './AIProcessor';
 
@@ -37,7 +36,7 @@ export const ABTestingModule: React.FC<ABTestingModuleProps> = ({
   blurbOptions = [],
   onComplete
 }) => {
-  const { bookContent } = useBookContext();
+  const { content: bookContent } = useBookContext();
   const [selectedPersona, setSelectedPersona] = useState<string>('');
   const [testType, setTestType] = useState<'title' | 'cover' | 'blurb'>('title');
   const [optionA, setOptionA] = useState<string>('');
@@ -73,9 +72,9 @@ OPTION B: ${optionB}
 
 TARGET PERSONA:
 - Name: ${persona.name}
-- Demographics: ${persona.demographics}
-- Reading Preferences: ${persona.readingPreferences}
-- Motivations: ${persona.motivations.join(', ')}
+- Demographics: Age: ${persona.demographics.ageRange}, Gender: ${persona.demographics.gender}
+- Reading Preferences: ${persona.readingHabits.favoriteGenres.join(', ')}
+- Motivations: ${persona.psychographics.motivations.join(', ')}
 
 Based on the book content and this specific persona, predict which option would perform better and provide:
 
@@ -99,7 +98,7 @@ Format your response as JSON with this structure:
 }
       `;
 
-      const result = await AIProcessor.processRequest(prompt);
+      const result = await AIProcessor.processPrompt(prompt);
       const testResult: ABTestResult = JSON.parse(result);
       
       const newResults = [...results, testResult];

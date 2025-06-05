@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,7 +16,7 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
-import { ReaderPersona } from '../BookAnalyzer';
+import { ReaderPersona } from './types';
 import { useBookContext } from './BookContextProvider';
 import { AIProcessor } from './AIProcessor';
 
@@ -58,7 +57,7 @@ export const StrategyDashboard: React.FC<StrategyDashboardProps> = ({
   onExportStrategy,
   onGoToModule
 }) => {
-  const { bookContent } = useBookContext();
+  const { content: bookContent } = useBookContext();
   const [decisions, setDecisions] = useState<StrategyDecision[]>([]);
   const [cohesionCheck, setCohesionCheck] = useState<CohesionCheck | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -96,7 +95,7 @@ Format as JSON:
 }
       `;
 
-      const result = await AIProcessor.processRequest(prompt);
+      const result = await AIProcessor.processPrompt(prompt);
       const check: CohesionCheck = JSON.parse(result);
       setCohesionCheck(check);
     } catch (error) {
@@ -263,7 +262,7 @@ Format as JSON:
                   {personas.map((persona) => (
                     <div key={persona.id} className="flex items-center justify-between">
                       <span className="font-medium">{persona.name}</span>
-                      <Badge variant="outline">{persona.demographics}</Badge>
+                      <Badge variant="outline">{persona.demographics.ageRange}</Badge>
                     </div>
                   ))}
                 </div>

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MessageSquare, Target, TrendingUp, Users, Hash, BookOpen } from 'lucide-react';
-import { ReaderPersona } from '../BookAnalyzer';
+import { ReaderPersona } from './types';
 import { useBookContext } from './BookContextProvider';
 import { AIProcessor } from './AIProcessor';
 
@@ -50,7 +49,7 @@ export const MarketingStrategyModule: React.FC<MarketingStrategyModuleProps> = (
   selectedBlurb,
   onComplete
 }) => {
-  const { bookContent } = useBookContext();
+  const { content: bookContent } = useBookContext();
   const [selectedPersonas, setSelectedPersonas] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [strategy, setStrategy] = useState<MarketingStrategy | null>(null);
@@ -75,10 +74,10 @@ SELECTED MARKETING ASSETS:
 
 TARGET PERSONAS:
 ${targetPersonas.map(p => `
-- ${p.name}: ${p.demographics}
-  Reading Preferences: ${p.readingPreferences}
-  Motivations: ${p.motivations.join(', ')}
-  Pain Points: ${p.painPoints.join(', ')}
+- ${p.name}: Age ${p.demographics.ageRange}, ${p.demographics.gender}
+  Reading Preferences: ${p.readingHabits.favoriteGenres.join(', ')}
+  Motivations: ${p.psychographics.motivations.join(', ')}
+  Pain Points: ${p.psychographics.painPoints.join(', ')}
 `).join('\n')}
 
 Generate a comprehensive marketing strategy including:
@@ -116,7 +115,7 @@ Format as JSON:
 }
       `;
 
-      const result = await AIProcessor.processRequest(prompt);
+      const result = await AIProcessor.processPrompt(prompt);
       const marketingStrategy: MarketingStrategy = JSON.parse(result);
       
       setStrategy(marketingStrategy);
