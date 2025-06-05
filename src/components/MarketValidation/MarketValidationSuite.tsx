@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,8 +9,11 @@ import { TargetAudienceModule } from './TargetAudienceModule';
 import { TitleFeedbackModule } from './TitleFeedbackModule';
 import { CoverFeedbackModule } from './CoverFeedbackModule';
 import { BlurbFeedbackModule } from './BlurbFeedbackModule';
+import { ABTestingModule } from './ABTestingModule';
+import { MarketingStrategyModule } from './MarketingStrategyModule';
+import { StrategyDashboard } from './StrategyDashboard';
 import { ReaderPersona, MarketPosition, TrendAnalysis } from './types';
-import { CheckCircle, Circle, BookOpen, Users, MessageSquare, Image, FileText } from 'lucide-react';
+import { CheckCircle, Circle, BookOpen, Users, MessageSquare, Target, TrendingUp, BarChart3 } from 'lucide-react';
 
 interface MarketValidationSuiteProps {
   bookContent: string;
@@ -30,6 +32,15 @@ export const MarketValidationSuite: React.FC<MarketValidationSuiteProps> = ({ bo
   const [titleFeedback, setTitleFeedback] = useState<any[]>([]);
   const [coverFeedback, setCoverFeedback] = useState<any[]>([]);
   const [blurbFeedback, setBlurbFeedback] = useState<any[]>([]);
+  
+  // Phase 3 & 4 Data
+  const [abTestResults, setAbTestResults] = useState<any[]>([]);
+  const [marketingStrategy, setMarketingStrategy] = useState<any>(null);
+  
+  // Final selections
+  const [selectedTitle, setSelectedTitle] = useState<string>('');
+  const [selectedCover, setSelectedCover] = useState<string>('');
+  const [selectedBlurb, setSelectedBlurb] = useState<string>('');
 
   const markModuleComplete = (moduleId: string) => {
     setCompletedModules(prev => new Set([...prev, moduleId]));
@@ -53,16 +64,23 @@ export const MarketValidationSuite: React.FC<MarketValidationSuiteProps> = ({ bo
     {
       id: 'testing',
       name: 'A/B Testing & Validation',
-      icon: Users,
+      icon: Target,
       description: 'Concept testing and optimization',
-      modules: ['abtest', 'concept']
+      modules: ['abtest']
     },
     {
       id: 'strategy',
       name: 'Marketing Strategy',
-      icon: FileText,
+      icon: TrendingUp,
       description: 'Launch strategy and channel recommendations',
-      modules: ['messaging', 'channels']
+      modules: ['marketing']
+    },
+    {
+      id: 'dashboard',
+      name: 'Strategy Dashboard',
+      icon: BarChart3,
+      description: 'Review and export your complete strategy',
+      modules: ['dashboard']
     }
   ];
 
@@ -73,11 +91,45 @@ export const MarketValidationSuite: React.FC<MarketValidationSuiteProps> = ({ bo
       case 'feedback':
         return completedModules.has('landscape') && completedModules.has('audience');
       case 'testing':
-        return completedModules.has('titles') || completedModules.has('covers') || completedModules.has('blurbs');
+        return completedModules.has('titles') && completedModules.has('covers') && completedModules.has('blurbs');
       case 'strategy':
-        return completedModules.has('titles') && (completedModules.has('covers') || completedModules.has('blurbs'));
+        return completedModules.has('titles') && completedModules.has('audience');
+      case 'dashboard':
+        return completedModules.has('audience') && (completedModules.has('titles') || completedModules.has('covers') || completedModules.has('blurbs'));
       default:
         return false;
+    }
+  };
+
+  const handleExportStrategy = () => {
+    const strategy = {
+      bookTitle: selectedTitle,
+      coverConcept: selectedCover,
+      blurb: selectedBlurb,
+      targetPersonas: personas,
+      marketPosition,
+      marketingStrategy,
+      abTestResults,
+      generatedAt: new Date().toISOString()
+    };
+    
+    const blob = new Blob([JSON.stringify(strategy, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'book-marketing-strategy.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleGoToModule = (moduleId: string) => {
+    // Navigate to the appropriate phase based on module
+    if (['titles', 'covers', 'blurbs'].includes(moduleId)) {
+      setActivePhase('feedback');
+    } else if (moduleId === 'abtest') {
+      setActivePhase('testing');
+    } else if (moduleId === 'marketing') {
+      setActivePhase('strategy');
     }
   };
 
@@ -97,7 +149,7 @@ export const MarketValidationSuite: React.FC<MarketValidationSuiteProps> = ({ bo
         {/* Phase Navigation */}
         <Card>
           <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               {phases.map((phase) => {
                 const Icon = phase.icon;
                 const isAccessible = canAccessPhase(phase.id);
@@ -170,12 +222,12 @@ export const MarketValidationSuite: React.FC<MarketValidationSuiteProps> = ({ bo
             <Tabs defaultValue="titles" className="space-y-6">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="titles" className="flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
+                  <BookOpen className="w-4 h-4" />
                   Titles
                   {completedModules.has('titles') && <CheckCircle className="w-4 h-4 text-green-500" />}
                 </TabsTrigger>
                 <TabsTrigger value="covers" className="flex items-center gap-2">
-                  <Image className="w-4 h-4" />
+                  <MessageSquare className="w-4 h-4" />
                   Covers
                   {completedModules.has('covers') && <CheckCircle className="w-4 h-4 text-green-500" />}
                 </TabsTrigger>
@@ -219,25 +271,42 @@ export const MarketValidationSuite: React.FC<MarketValidationSuiteProps> = ({ bo
           )}
 
           {activePhase === 'testing' && (
-            <Card>
-              <CardContent className="p-6">
-                <div className="text-center py-8">
-                  <h3 className="text-lg font-medium mb-2">A/B Testing & Validation</h3>
-                  <p className="text-gray-600">Coming in Phase 3 implementation</p>
-                </div>
-              </CardContent>
-            </Card>
+            <ABTestingModule
+              personas={personas}
+              titleOptions={titleFeedback.flatMap(f => f.titles || [])}
+              coverOptions={coverFeedback.flatMap(f => f.covers || [])}
+              blurbOptions={blurbFeedback.flatMap(f => f.blurbs || [])}
+              onComplete={(results) => {
+                setAbTestResults(results);
+                markModuleComplete('abtest');
+              }}
+            />
           )}
 
           {activePhase === 'strategy' && (
-            <Card>
-              <CardContent className="p-6">
-                <div className="text-center py-8">
-                  <h3 className="text-lg font-medium mb-2">Marketing Strategy</h3>
-                  <p className="text-gray-600">Coming in Phase 4 implementation</p>
-                </div>
-              </CardContent>
-            </Card>
+            <MarketingStrategyModule
+              personas={personas}
+              selectedTitle={selectedTitle}
+              selectedCover={selectedCover}
+              selectedBlurb={selectedBlurb}
+              onComplete={(strategy) => {
+                setMarketingStrategy(strategy);
+                markModuleComplete('marketing');
+              }}
+            />
+          )}
+
+          {activePhase === 'dashboard' && (
+            <StrategyDashboard
+              personas={personas}
+              selectedTitle={selectedTitle}
+              selectedCover={selectedCover}
+              selectedBlurb={selectedBlurb}
+              marketingStrategy={marketingStrategy}
+              abTestResults={abTestResults}
+              onExportStrategy={handleExportStrategy}
+              onGoToModule={handleGoToModule}
+            />
           )}
         </div>
 
@@ -255,7 +324,7 @@ export const MarketValidationSuite: React.FC<MarketValidationSuiteProps> = ({ bo
               ))}
             </div>
             <p className="text-sm text-gray-600 mt-2">
-              {completedModules.size} of 11 modules completed
+              {completedModules.size} of 8 modules completed
             </p>
           </CardContent>
         </Card>
