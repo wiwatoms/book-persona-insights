@@ -1,4 +1,6 @@
 
+import { getDocument } from 'react-pdf/dist/esm/entry.webpack5';
+
 export interface FileProcessingResult {
   content: string;
   metadata: {
@@ -47,26 +49,38 @@ export class FileProcessor {
 
   private static async processPDF(file: File): Promise<{ text: string; numPages: number }> {
     try {
-      const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pdf = await getDocument({ data: arrayBuffer }).promise;
       const numPages = pdf.numPages;
       let fullText = '';
 
       for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join(' ');
-        fullText += pageText + '\n\n';
+        try {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item: any) => item.str)
+            .join(' ');
+          fullText += pageText + '\n\n';
+        } catch (pageError) {
+          console.warn(`Could not extract text from page ${pageNum}:`, pageError);
+          // Continue with other pages
+        }
+      }
+
+      if (fullText.trim().length < 50) {
+        throw new Error('INSUFFICIENT_TEXT_CONTENT');
       }
 
       return { text: fullText.trim(), numPages };
     } catch (error) {
       console.error('PDF processing error:', error);
-      if (error instanceof Error && (error.message.includes('password') || error.message.includes('encrypted'))) {
-        throw new Error('PASSWORD_PROTECTED');
+      if (error instanceof Error) {
+        if (error.message.includes('password') || error.message.includes('encrypted')) {
+          throw new Error('PASSWORD_PROTECTED');
+        } else if (error.message.includes('INSUFFICIENT_TEXT_CONTENT')) {
+          throw new Error('INSUFFICIENT_TEXT_CONTENT');
+        }
       }
       throw new Error('PDF_PROCESSING_FAILED');
     }

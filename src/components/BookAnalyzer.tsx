@@ -1,14 +1,15 @@
-
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileUploader } from './FileUploader';
 import { ArchetypeManager } from './ArchetypeManager';
 import { AnalysisProgressDisplay } from './AnalysisProgressDisplay';
 import { ResultsDashboard } from './ResultsDashboard';
+import { MarketValidationSuite } from './MarketValidation/MarketValidationSuite';
 import { AIAnalysisService, AIConfig } from './AIAnalysisService';
 import { AnalysisController, AnalysisProgress } from './AnalysisEngine';
-import { AlertCircle, RotateCcw } from 'lucide-react';
+import { AlertCircle, RotateCcw, BookOpen, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface ReaderArchetype {
@@ -199,17 +200,39 @@ export const BookAnalyzer = () => {
         );
       case 'results':
         return (
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>4. Analyse-Ergebnisse</CardTitle>
-                <Button onClick={handleRestart} variant="outline"><RotateCcw className="w-4 h-4 mr-2" />Neue Analyse</Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ResultsDashboard results={{ analysis: aggregatedResults as any }} />
-            </CardContent>
-          </Card>
+          <Tabs defaultValue="analysis" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="analysis" className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4" />
+                Reader Analysis
+              </TabsTrigger>
+              <TabsTrigger value="market" className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4" />
+                Market Validation
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="analysis">
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>Reader Analysis Results</CardTitle>
+                    <Button onClick={handleRestart} variant="outline">
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Neue Analyse
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ResultsDashboard results={{ analysis: aggregatedResults as any }} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="market">
+              <MarketValidationSuite bookContent={fileContent} />
+            </TabsContent>
+          </Tabs>
         );
       default:
         return <div>Invalid step</div>;
