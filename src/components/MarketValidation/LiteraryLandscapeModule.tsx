@@ -19,7 +19,7 @@ export const LiteraryLandscapeModule: React.FC<LiteraryLandscapeModuleProps> = (
   const [genres, setGenres] = useState<string[]>(['']);
   const [competitorTitles, setCompetitorTitles] = useState<string[]>(['']);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [results, setResults<{
+  const [results, setResults] = useState<{
     marketPosition: MarketPosition;
     trendAnalysis: TrendAnalysis;
   } | null>(null);
