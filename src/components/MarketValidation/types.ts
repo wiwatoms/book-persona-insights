@@ -14,6 +14,7 @@ export interface BookContext {
 export interface ReaderPersona {
   id: string;
   name: string;
+  summary: string; // Added this property to match component usage
   demographics: {
     ageRange: string;
     gender: string;
