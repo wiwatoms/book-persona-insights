@@ -1,14 +1,15 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { FileUploader } from './FileUploader';
 import { ArchetypeManager } from './ArchetypeManager';
-import { AnalysisProgress } from './AnalysisProgress';
+import { AnalysisProgressDisplay } from './AnalysisProgressDisplay';
 import { ResultsDashboard } from './ResultsDashboard';
-import { AdvancedArchetypeManager } from './AdvancedArchetypeManager'; 
-import { AdvancedPromptEditor } from './AdvancedPromptEditor';
-import { FileText, Users, TrendingUp, BarChart3, Settings } from 'lucide-react';
+import { AIAnalysisService, AIConfig } from './AIAnalysisService';
+import { AnalysisController, AnalysisProgress } from './AnalysisEngine';
+import { AlertCircle, RotateCcw } from 'lucide-react';
+import { toast } from 'sonner';
 
 export interface ReaderArchetype {
   id: string;
@@ -25,16 +26,16 @@ export interface AnalysisResult {
   archetypeId: string;
   chunkIndex: number;
   ratings: {
-    engagement: number; // 1-10 scale
-    style: number; // 1-10 scale
-    clarity: number; // 1-10 scale
-    pacing: number; // 1-10 scale
-    relevance: number; // 1-10 scale
+    engagement: number;
+    style: number;
+    clarity: number;
+    pacing: number;
+    relevance: number;
   };
-  overallRating: number; // 1-10 scale
+  overallRating: number;
   feedback: string;
-  buyingProbability: number; // 0-1 scale
-  recommendationLikelihood: number; // 0-1 scale
+  buyingProbability: number;
+  recommendationLikelihood: number;
   expectedReviewSentiment: 'positive' | 'neutral' | 'negative';
   marketingInsights: string[];
 }
@@ -47,8 +48,8 @@ export interface StreamOfThoughtResult {
   immediateQuotes: string[];
   fragmentedInsights: string[];
   mood: 'excited' | 'bored' | 'confused' | 'engaged' | 'frustrated' | 'curious';
-  attentionLevel: number; // 1-10
-  personalResonance: number; // 1-10
+  attentionLevel: number;
+  personalResonance: number;
 }
 
 export interface AnalyticalInsight {
@@ -60,174 +61,160 @@ export interface AnalyticalInsight {
   competitiveAdvantages: string[];
   riskFactors: string[];
   recommendedActions: string[];
-  confidenceScore: number; // 1-10
+  confidenceScore: number;
 }
 
+// Main component orchestrating the entire analysis process
 export const BookAnalyzer = () => {
-  const [activeTab, setActiveTab] = useState('upload');
+  type Step = 'config' | 'upload' | 'archetypes' | 'analyzing' | 'results';
+  
+  const [step, setStep] = useState<Step>('config');
+  const [aiConfig, setAiConfig] = useState<AIConfig | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
+  const [textPreview, setTextPreview] = useState<string>('');
   const [archetypes, setArchetypes] = useState<ReaderArchetype[]>([]);
+  const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
-  const [streamOfThoughtResults, setStreamOfThoughtResults] = useState<StreamOfThoughtResult[]>([]);
-  const [analyticalInsights, setAnalyticalInsights] = useState<AnalyticalInsight[]>([]);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [advancedMode, setAdvancedMode] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  
+  const [analysisController] = useState(() => new AnalysisController());
 
-  // Mock analysis steps for AnalysisProgress component
-  const mockAnalysisSteps = [
-    { id: 'chunk', name: 'Text aufteilen', status: 'completed' as const, progress: 100 },
-    { id: 'analyze', name: 'Analyse durchführen', status: 'running' as const, progress: 45 },
-    { id: 'compile', name: 'Ergebnisse zusammenfassen', status: 'pending' as const, progress: 0 }
-  ];
+  const handleConfigured = (config: AIConfig) => {
+    setAiConfig(config);
+    setStep('upload');
+    toast.success("AI Konfiguration gespeichert.");
+  };
 
   const handleFileUploaded = (content: string) => {
     setFileContent(content);
-    setActiveTab('archetypes');
+    setTextPreview(content.substring(0, 700) + '...');
+    setStep('archetypes');
+    toast.success("Datei erfolgreich geladen.");
   };
 
-  const handleArchetypesReady = (archetypeList: ReaderArchetype[]) => {
-    setArchetypes(archetypeList);
-    setActiveTab('analysis');
+  const handleArchetypesReady = (selectedArchetypes: ReaderArchetype[]) => {
+    setArchetypes(selectedArchetypes);
+    startAnalysis(selectedArchetypes);
   };
 
-  const handleAnalysisComplete = (results: AnalysisResult[]) => {
-    setAnalysisResults(results);
-    setActiveTab('results');
+  const startAnalysis = async (selectedArchetypes: ReaderArchetype[]) => {
+    if (!fileContent || !aiConfig || analysisController.isAnalysisRunning()) return;
+    
+    setAnalysisError(null);
+    setAnalysisResults([]);
+    setStep('analyzing');
+    toast.info("Analyse gestartet...", {
+      description: "Die Ergebnisse werden schrittweise angezeigt.",
+    });
+
+    try {
+      const results = await analysisController.runAnalysis(
+        fileContent,
+        selectedArchetypes,
+        aiConfig,
+        (progress) => setAnalysisProgress(progress)
+      );
+      setAnalysisResults(results);
+      setStep('results');
+      toast.success("Analyse erfolgreich abgeschlossen!");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Ein unbekannter Fehler ist aufgetreten.";
+      setAnalysisError(errorMessage);
+      toast.error("Analyse fehlgeschlagen", { description: errorMessage });
+      setStep('archetypes'); // Return to the previous step
+    }
   };
 
-  const handleLayeredAnalysisComplete = (
-    standardResults: AnalysisResult[], 
-    sotResults: StreamOfThoughtResult[], 
-    insights: AnalyticalInsight[]
-  ) => {
-    setAnalysisResults(standardResults);
-    setStreamOfThoughtResults(sotResults);
-    setAnalyticalInsights(insights);
-    setActiveTab('results');
+  const handleStopAnalysis = () => {
+    analysisController.stop();
+    setStep('archetypes');
+    toast.warning("Analyse wurde manuell gestoppt.");
   };
+  
+  const handleRestart = () => {
+    setStep('upload');
+    setFileContent('');
+    setTextPreview('');
+    setArchetypes([]);
+    setAnalysisResults([]);
+    setAnalysisProgress(null);
+    setAnalysisError(null);
+  };
+  
+  const aggregatedResults = useMemo(() => {
+    if (analysisResults.length === 0) return [];
 
-  return (
-    <div className="max-w-7xl mx-auto">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-        <TabsList className="grid w-full grid-cols-4 md:grid-cols-5 bg-white/70 backdrop-blur-sm border border-slate-200">
-          <TabsTrigger 
-            value="upload" 
-            className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
-          >
-            <FileText className="w-4 h-4" />
-            <span className="hidden sm:inline">Datei Upload</span>
-            <span className="sm:hidden">Datei</span>
-          </TabsTrigger>
-          <TabsTrigger 
-            value="archetypes"
-            disabled={!fileContent}
-            className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
-          >
-            <Users className="w-4 h-4" />
-            <span className="hidden sm:inline">Leser-Archetypen</span>
-            <span className="sm:hidden">Leser</span>
-          </TabsTrigger>
-          <TabsTrigger 
-            value="analysis"
-            disabled={archetypes.length === 0}
-            className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
-          >
-            <TrendingUp className="w-4 h-4" />
-            <span className="hidden sm:inline">Analyse</span>
-            <span className="sm:hidden">Analyse</span>
-          </TabsTrigger>
-          <TabsTrigger 
-            value="results"
-            disabled={analysisResults.length === 0}
-            className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span className="hidden sm:inline">Ergebnisse</span>
-            <span className="sm:hidden">Ergebnisse</span>
-          </TabsTrigger>
-          <TabsTrigger 
-            value="settings"
-            className="hidden md:flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
-          >
-            <Settings className="w-4 h-4" />
-            <span className="hidden sm:inline">Einstellungen</span>
-            <span className="sm:hidden">Options</span>
-          </TabsTrigger>
-        </TabsList>
+    return archetypes.map(archetype => {
+      const archetypeResults = analysisResults.filter(r => r.archetypeId === archetype.id);
+      if (archetypeResults.length === 0) return null;
 
-        <TabsContent value="upload" className="space-y-6">
-          <Card className="bg-white/70 backdrop-blur-sm border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-2xl text-slate-800">Manuskript hochladen</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FileUploader onFileUploaded={handleFileUploaded} />
-            </CardContent>
+      const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
+      
+      return {
+        name: archetype.name,
+        Gesamtwertung: avg(archetypeResults.map(r => r.overallRating)),
+        Engagement: avg(archetypeResults.map(r => r.ratings.engagement)),
+        Stil: avg(archetypeResults.map(r => r.ratings.style)),
+        Klarheit: avg(archetypeResults.map(r => r.ratings.clarity)),
+        Tempo: avg(archetypeResults.map(r => r.ratings.pacing)),
+        Relevanz: avg(archetypeResults.map(r => r.ratings.relevance)),
+      };
+    }).filter(Boolean);
+  }, [analysisResults, archetypes]);
+
+  const renderStep = () => {
+    switch (step) {
+      case 'config':
+        return (
+          <Card>
+            <CardHeader><CardTitle>1. AI Konfiguration</CardTitle></CardHeader>
+            <CardContent><AIAnalysisService onConfigured={handleConfigured} /></CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="archetypes" className="space-y-6">
-          <Card className="bg-white/70 backdrop-blur-sm border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-2xl text-slate-800">Leser-Archetypen konfigurieren</CardTitle>
-            </CardHeader>
+        );
+      case 'upload':
+        return (
+          <Card>
+            <CardHeader><CardTitle>2. Manuskript hochladen</CardTitle></CardHeader>
+            <CardContent><FileUploader onFileUploaded={handleFileUploaded} /></CardContent>
+          </Card>
+        );
+      case 'archetypes':
+        return (
+          <Card>
+            <CardHeader><CardTitle>3. Leser-Archetypen bestätigen</CardTitle></CardHeader>
+            <CardContent><ArchetypeManager onArchetypesReady={handleArchetypesReady} textPreview={textPreview} /></CardContent>
+          </Card>
+        );
+      case 'analyzing':
+        return (
+          <Card>
+            <CardHeader><CardTitle>Analyse läuft...</CardTitle></CardHeader>
             <CardContent>
-              {advancedMode ? (
-                <AdvancedArchetypeManager 
-                  onArchetypesReady={handleArchetypesReady}
-                  textPreview={fileContent.substring(0, 500) + '...'}
-                />
-              ) : (
-                <ArchetypeManager 
-                  onArchetypesReady={handleArchetypesReady}
-                  textPreview={fileContent.substring(0, 500) + '...'}
-                />
+              {analysisProgress && (
+                <AnalysisProgressDisplay progress={analysisProgress} archetypes={archetypes} />
               )}
+              <Button onClick={handleStopAnalysis} variant="destructive" className="mt-4">Analyse stoppen</Button>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="analysis" className="space-y-6">
-          <Card className="bg-white/70 backdrop-blur-sm border-slate-200">
+        );
+      case 'results':
+        return (
+          <Card>
             <CardHeader>
-              <CardTitle className="text-2xl text-slate-800">Analyse läuft...</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>4. Analyse-Ergebnisse</CardTitle>
+                <Button onClick={handleRestart} variant="outline"><RotateCcw className="w-4 h-4 mr-2" />Neue Analyse</Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <AnalysisProgress 
-                steps={mockAnalysisSteps}
-                currentStep={1}
-                totalSteps={3}
-                isBackgroundJob={false}
-              />
+              <ResultsDashboard results={{ analysis: aggregatedResults as any }} />
             </CardContent>
           </Card>
-        </TabsContent>
+        );
+      default:
+        return <div>Invalid step</div>;
+    }
+  };
 
-        <TabsContent value="results" className="space-y-6">
-          <ResultsDashboard 
-            results={{ analysis: analysisResults.map(result => ({
-              name: `Archetype ${result.archetypeId}`,
-              Gesamtwertung: result.overallRating,
-              Engagement: result.ratings.engagement,
-              Stil: result.ratings.style,
-              Klarheit: result.ratings.clarity,
-              Tempo: result.ratings.pacing,
-              Relevanz: result.ratings.relevance
-            })) }}
-          />
-        </TabsContent>
-
-        <TabsContent value="settings" className="space-y-6">
-          <Card className="bg-white/70 backdrop-blur-sm border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-2xl text-slate-800">Erweiterte Einstellungen</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AdvancedPromptEditor onPromptsChanged={() => {}} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
+  return <div className="max-w-7xl mx-auto space-y-8">{renderStep()}</div>;
 };

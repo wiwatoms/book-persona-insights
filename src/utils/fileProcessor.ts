@@ -12,52 +12,66 @@ export interface FileProcessingResult {
 export class FileProcessor {
   static async processFile(file: File): Promise<FileProcessingResult> {
     const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
-    
     let content: string;
     let pages: number | undefined;
-    
+    let fileType: string;
+
     if (file.type === 'application/pdf') {
-      content = await this.processPDF(file);
-      // For PDF, estimate pages based on content length (rough approximation)
-      pages = Math.max(1, Math.ceil(content.length / 2000));
+      fileType = 'PDF';
+      const pdfData = await this.processPDF(file);
+      content = pdfData.text;
+      pages = pdfData.numPages;
     } else if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+      fileType = 'Text';
       content = await this.processTextFile(file);
     } else {
       throw new Error('UNSUPPORTED_FILE_TYPE');
     }
-    
+
     if (content.trim().length < 50) {
       throw new Error('INSUFFICIENT_TEXT_CONTENT');
     }
-    
+
     const wordCount = content.trim().split(/\s+/).filter(word => word.length > 0).length;
-    
+
     return {
       content: content.trim(),
       metadata: {
         pages,
         wordCount,
         size: `${sizeInMB} MB`,
-        fileType: file.type === 'application/pdf' ? 'PDF' : 'Text'
+        fileType,
       }
     };
   }
-  
-  private static async processPDF(file: File): Promise<string> {
+
+  private static async processPDF(file: File): Promise<{ text: string; numPages: number }> {
     try {
-      // Use pdf-parse library which is already installed
-      const pdfParse = await import('pdf-parse');
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+
       const arrayBuffer = await file.arrayBuffer();
-      const buffer = new Uint8Array(arrayBuffer);
-      
-      const data = await pdfParse.default(buffer);
-      return data.text;
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const numPages = pdf.numPages;
+      let fullText = '';
+
+      for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        fullText += pageText + '\n\n';
+      }
+
+      return { text: fullText.trim(), numPages };
     } catch (error) {
       console.error('PDF processing error:', error);
+      if (error instanceof Error && (error.message.includes('password') || error.message.includes('encrypted'))) {
+        throw new Error('PASSWORD_PROTECTED');
+      }
       throw new Error('PDF_PROCESSING_FAILED');
     }
   }
-  
+
   private static async processTextFile(file: File): Promise<string> {
     try {
       return await file.text();
@@ -66,61 +80,21 @@ export class FileProcessor {
       throw new Error('TEXT_PROCESSING_FAILED');
     }
   }
-  
+
   static getErrorMessage(errorCode: string, fileName: string): string {
     const baseMessage = `Upload-Fehler: Wir konnten den Text aus "${fileName}" nicht extrahieren.`;
     
     switch (errorCode) {
       case 'UNSUPPORTED_FILE_TYPE':
-        return `${baseMessage} Dieser Dateityp wird nicht unterstützt.
-
-**Unterstützte Formate:**
-- PDF-Dateien (.pdf)
-- Textdateien (.txt)
-
-**Lösung:** Bitte konvertieren Sie Ihre Datei in eines der unterstützten Formate.`;
-
+        return `${baseMessage} Dieser Dateityp wird nicht unterstützt.\n\n**Lösung:** Bitte eine PDF- oder TXT-Datei verwenden.`;
       case 'INSUFFICIENT_TEXT_CONTENT':
-        return `${baseMessage} Die Datei enthält zu wenig lesbaren Text.
-
-**Mögliche Ursachen:**
-- Gescannte PDF ohne OCR
-- Leere oder fast leere Datei
-- Datei enthält hauptsächlich Bilder
-
-**Lösungen:**
-1. Für gescannte PDFs: OCR-Tool verwenden
-2. Textinhalt direkt kopieren und als .txt-Datei speichern
-3. Dokument aus der Originalquelle (Word, Google Docs) als PDF exportieren`;
-
+        return `${baseMessage} Die Datei enthält zu wenig lesbaren Text.\n\n**Lösung:** Sicherstellen, dass die Datei Text enthält und nicht nur Bilder.`;
+      case 'PASSWORD_PROTECTED':
+        return `${baseMessage} Das PDF ist Passwort-geschützt.\n\n**Lösung:** Bitte den Schutz entfernen und erneut hochladen.`;
       case 'PDF_PROCESSING_FAILED':
-        return `${baseMessage} PDF konnte nicht verarbeitet werden.
-
-**Mögliche Ursachen:**
-- Passwort-geschützte PDF
-- Beschädigte PDF-Datei
-- Komplexe Formatierung
-
-**Lösungen:**
-1. **Passwort entfernen:** PDF ohne Schutz speichern
-2. **Als Text speichern:** Text kopieren und als .txt-Datei speichern
-3. **Neu exportieren:** Dokument aus Originalquelle neu als PDF speichern`;
-
-      case 'TEXT_PROCESSING_FAILED':
-        return `${baseMessage} Textdatei konnte nicht gelesen werden.
-
-**Lösungen:**
-1. Datei in UTF-8 Kodierung speichern
-2. Sicherstellen, dass die Datei nicht beschädigt ist
-3. Als neue .txt-Datei speichern`;
-
+        return `${baseMessage} Das PDF konnte nicht verarbeitet werden.\n\n**Mögliche Ursachen:**\n- Komplexes Format oder Beschädigung\n- Gescannte Bilder ohne Text (OCR erforderlich)\n\n**Lösung:** Versuchen Sie, den Text zu kopieren und als TXT-Datei zu speichern.`;
       default:
-        return `${baseMessage} Ein unerwarteter Fehler ist aufgetreten.
-
-**Allgemeine Lösungen:**
-1. **Textdatei verwenden:** Text kopieren und als .txt-Datei speichern
-2. **PDF neu erstellen:** Dokument aus Originalquelle neu exportieren
-3. **Kleinere Datei:** Dokument aufteilen, falls sehr groß`;
+        return `${baseMessage} Ein unerwarteter Fehler ist aufgetreten.`;
     }
   }
 }
