@@ -1,284 +1,115 @@
 
-import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+import React, { useEffect, useState } from 'react';
+import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ReaderArchetype, AnalysisResult } from './BookAnalyzer';
-import { AIAnalysisService, AIConfig } from './AIAnalysisService';
-import { BackgroundJobManager } from '../utils/backgroundProcessing';
-import { AnalysisProgressDisplay } from './AnalysisProgressDisplay';
-import { AdvancedArchetypeManager } from './AdvancedArchetypeManager';
-import { AdvancedPromptEditor } from './AdvancedPromptEditor';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Play, Pause, RotateCcw, AlertCircle, Settings, Users, Code } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { CheckCircle, Clock, AlertCircle } from 'lucide-react';
+
+interface AnalysisStep {
+  id: string;
+  name: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
+}
 
 interface AnalysisProgressProps {
-  pdfContent: string;
-  archetypes: ReaderArchetype[];
-  onAnalysisComplete: (results: AnalysisResult[]) => void;
-  isAnalyzing: boolean;
-  setIsAnalyzing: (analyzing: boolean) => void;
+  steps: AnalysisStep[];
+  currentStep: number;
+  totalSteps: number;
+  isBackgroundJob?: boolean;
 }
 
 export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
-  pdfContent,
-  archetypes: initialArchetypes,
-  onAnalysisComplete,
-  isAnalyzing,
-  setIsAnalyzing
+  steps,
+  currentStep,
+  totalSteps,
+  isBackgroundJob = false
 }) => {
-  const [aiConfig, setAIConfig] = useState<AIConfig | null>(null);
-  const [archetypes, setArchetypes] = useState<ReaderArchetype[]>(initialArchetypes);
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-  const [backgroundJob, setBackgroundJob] = useState<any>(null);
-  const [customPrompts, setCustomPrompts] = useState<any[]>([]);
-  const { toast } = useToast();
-
-  // Background job manager
-  const jobManager = BackgroundJobManager.getInstance();
+  const [overallProgress, setOverallProgress] = useState(0);
 
   useEffect(() => {
-    // Load existing jobs on component mount
-    jobManager.loadJobsFromStorage();
+    const completedSteps = steps.filter(step => step.status === 'completed').length;
+    const runningStepProgress = steps.find(step => step.status === 'running')?.progress || 0;
     
-    // Check for existing config
-    const savedApiKey = localStorage.getItem('openai_api_key');
-    const savedModel = localStorage.getItem('openai_model');
-    if (savedApiKey && savedModel) {
-      setAIConfig({ apiKey: savedApiKey, model: savedModel });
+    const progress = ((completedSteps * 100) + runningStepProgress) / totalSteps;
+    setOverallProgress(Math.min(progress, 100));
+  }, [steps, totalSteps]);
+
+  const getStatusIcon = (status: AnalysisStep['status']) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'running':
+        return <Clock className="h-4 w-4 text-blue-500 animate-spin" />;
+      case 'failed':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-gray-400" />;
     }
-
-    // Poll for job updates
-    const pollInterval = setInterval(() => {
-      if (currentJobId) {
-        const job = jobManager.getJob(currentJobId);
-        if (job) {
-          setBackgroundJob(job);
-          
-          if (job.status === 'complete') {
-            setIsAnalyzing(false);
-            onAnalysisComplete(job.results || []);
-            setCurrentJobId(null);
-            toast({
-              title: "Analyse abgeschlossen",
-              description: `${job.results?.length || 0} Bewertungen erstellt`,
-            });
-          } else if (job.status === 'failed') {
-            setIsAnalyzing(false);
-            setCurrentJobId(null);
-            toast({
-              title: "Analyse-Fehler",
-              description: job.error || 'Unbekannter Fehler',
-              variant: "destructive",
-            });
-          }
-        }
-      }
-    }, 1000);
-    
-    return () => clearInterval(pollInterval);
-  }, [currentJobId]);
-
-  useEffect(() => {
-    // Update archetypes when initialArchetypes changes
-    setArchetypes(initialArchetypes);
-  }, [initialArchetypes]);
-
-  const validateInputs = (): string | null => {
-    if (!aiConfig) return 'AI-Konfiguration fehlt';
-    if (!pdfContent || pdfContent.length < 100) return 'Text ist zu kurz (mindestens 100 Zeichen erforderlich)';
-    if (archetypes.length === 0) return 'Keine Archetypen ausgewählt';
-    return null;
   };
 
-  const startAnalysis = async () => {
-    const error = validateInputs();
-    if (error) {
-      toast({
-        title: "Validierungsfehler",
-        description: error,
-        variant: "destructive",
-      });
-      return;
+  const getStatusColor = (status: AnalysisStep['status']) => {
+    switch (status) {
+      case 'completed':
+        return 'text-green-600';
+      case 'running':
+        return 'text-blue-600';
+      case 'failed':
+        return 'text-red-600';
+      default:
+        return 'text-gray-500';
     }
-
-    setIsAnalyzing(true);
-    
-    // Create a background job
-    const jobId = jobManager.createJob('analysis', {
-      pdfContent,
-      archetypes,
-      aiConfig: aiConfig!,
-      prompts: customPrompts.length > 0 ? customPrompts : undefined
-    });
-    
-    setCurrentJobId(jobId);
-    
-    toast({
-      title: "Analyse gestartet",
-      description: "Die Analyse läuft im Hintergrund und wird auch fortgesetzt, wenn Sie das Browser-Fenster schließen.",
-    });
   };
-
-  const stopAnalysis = () => {
-    if (currentJobId) {
-      const job = jobManager.getJob(currentJobId);
-      if (job) {
-        jobManager.updateJobStatus(currentJobId, 'failed', undefined, 'Vom Benutzer abgebrochen');
-      }
-    }
-    
-    setIsAnalyzing(false);
-    setCurrentJobId(null);
-    
-    toast({
-      title: "Analyse gestoppt",
-      description: "Die Analyse wurde vom Benutzer abgebrochen",
-    });
-  };
-
-  const resetAnalysis = () => {
-    stopAnalysis();
-    setBackgroundJob(null);
-    
-    toast({
-      title: "Analyse zurückgesetzt",
-      description: "Bereit für eine neue Analyse",
-    });
-  };
-
-  const handleArchetypesUpdated = (newArchetypes: ReaderArchetype[]) => {
-    setArchetypes(newArchetypes);
-  };
-
-  const handlePromptsUpdated = (newPrompts: any[]) => {
-    setCustomPrompts(newPrompts);
-  };
-
-  // Show AI config if not configured
-  if (!aiConfig) {
-    return <AIAnalysisService onConfigured={setAIConfig} />;
-  }
-
-  const inputError = validateInputs();
-  const progressData = backgroundJob?.progress ? {
-    currentStep: Math.round((backgroundJob.progress / 100) * (archetypes.length * 10)), // Approximate
-    totalSteps: archetypes.length * 10, // Approximate
-    currentArchetype: backgroundJob.data?.archetypes[0]?.name || '',
-    currentChunk: 1,
-    totalChunks: 10, // Approximate
-    status: backgroundJob.status === 'running' 
-      ? `Analyse läuft: ${backgroundJob.progress.toFixed(0)}% abgeschlossen` 
-      : `${backgroundJob.status}`,
-    results: backgroundJob.results || [],
-    apiCalls: backgroundJob.results?.length || 0,
-    tokenUsage: { prompt: 0, completion: 0 } // Not tracked in background job
-  } : null;
 
   return (
-    <div className="space-y-6">
-      <Tabs defaultValue="status" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="status" className="flex items-center gap-2">
-            <Play className="w-4 h-4" />
-            Analyse-Status
-          </TabsTrigger>
-          <TabsTrigger value="archetypes" className="flex items-center gap-2">
-            <Users className="w-4 h-4" />
-            Erweiterte Archetypen
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="flex items-center gap-2">
-            <Code className="w-4 h-4" />
-            Prompt-Editor
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="status" className="space-y-6">
-          {/* Input Validation Error */}
-          {inputError && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{inputError}</AlertDescription>
-            </Alert>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          Analyse-Fortschritt
+          {isBackgroundJob && (
+            <span className="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+              Hintergrund
+            </span>
           )}
-
-          {/* Progress Display */}
-          {backgroundJob && progressData && (
-            <AnalysisProgressDisplay 
-              progress={progressData} 
-              archetypes={archetypes}
-            />
-          )}
-
-          {/* Control Buttons */}
-          <div className="flex justify-center gap-4">
-            {!isAnalyzing && !backgroundJob && (
-              <Button 
-                onClick={startAnalysis} 
-                size="lg" 
-                className="bg-green-600 hover:bg-green-700"
-                disabled={!!inputError}
-              >
-                <Play className="w-5 h-5 mr-2" />
-                Analyse starten
-              </Button>
-            )}
-
-            {isAnalyzing && (
-              <Button onClick={stopAnalysis} size="lg" variant="outline">
-                <Pause className="w-5 h-5 mr-2" />
-                Stoppen
-              </Button>
-            )}
-
-            {(backgroundJob || !isAnalyzing) && (
-              <Button onClick={resetAnalysis} size="lg" variant="outline">
-                <RotateCcw className="w-5 h-5 mr-2" />
-                Zurücksetzen
-              </Button>
-            )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>Gesamt-Fortschritt</span>
+            <span>{Math.round(overallProgress)}%</span>
           </div>
+          <Progress value={overallProgress} className="w-full" />
+        </div>
 
-          {/* Analysis Info */}
-          {!backgroundJob && !inputError && (
-            <Card className="bg-blue-50 border-blue-200">
-              <CardContent className="pt-6">
-                <div className="text-center space-y-2">
-                  <div className="text-lg font-medium text-blue-800">
-                    Bereit für Analyse
-                  </div>
-                  <div className="text-sm text-blue-600">
-                    {archetypes.length} Archetypen × {Math.ceil(pdfContent.split(/\s+/).length / 400)} Abschnitte = {archetypes.length * Math.ceil(pdfContent.split(/\s+/).length / 400)} Analysen
-                  </div>
+        <div className="space-y-3">
+          {steps.map((step, index) => (
+            <div key={step.id} className="flex items-center gap-3">
+              {getStatusIcon(step.status)}
+              <div className="flex-1">
+                <div className={`text-sm font-medium ${getStatusColor(step.status)}`}>
+                  {step.name}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
+                {step.status === 'running' && (
+                  <Progress value={step.progress} className="w-full mt-1 h-1" />
+                )}
+              </div>
+              <div className="text-xs text-gray-500">
+                {step.status === 'completed' && '✓'}
+                {step.status === 'running' && `${step.progress}%`}
+                {step.status === 'failed' && '✗'}
+              </div>
+            </div>
+          ))}
+        </div>
 
-        <TabsContent value="archetypes" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="w-5 h-5" />
-                Archetypen konfigurieren
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AdvancedArchetypeManager
-                onArchetypesReady={handleArchetypesUpdated}
-                textPreview={pdfContent.substring(0, 500) + '...'}
-                initialArchetypes={archetypes}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="settings" className="space-y-4">
-          <AdvancedPromptEditor onPromptsChanged={handlePromptsUpdated} />
-        </TabsContent>
-      </Tabs>
-    </div>
+        {isBackgroundJob && (
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-700">
+              Die Analyse läuft im Hintergrund weiter. Sie können diese Seite verlassen und später zurückkehren.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };

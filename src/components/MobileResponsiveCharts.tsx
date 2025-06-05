@@ -1,11 +1,13 @@
+
 import React from 'react';
-import { BarChart, LineChart, PieChart, DonutChart, AreaChart } from '@/components/ui/chart';
-import { isMobile } from '@/hooks/use-mobile';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface MobileResponsiveBarChartProps {
   data: any[];
   xAxisKey: string;
-  yAxisKey: string;
+  yAxisKey?: string;
   name?: string;
   className?: string;
   categories?: string[];
@@ -18,61 +20,47 @@ export const MobileResponsiveBarChart: React.FC<MobileResponsiveBarChartProps> =
   yAxisKey,
   name,
   className,
-  categories,
-  colors
+  categories = [],
+  colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1']
 }) => {
-  const mobile = isMobile();
+  const isMobile = useIsMobile();
   
   // Mobile optimizations
-  const mobileConfig = mobile ? {
-    padding: { left: 20, right: 20, top: 20, bottom: 50 },
-    labelXFontSize: 10,
-    labelYFontSize: 10,
-    tickRotation: -45,
-    barGap: 2
-  } : {
-    padding: { left: 40, right: 20, top: 10, bottom: 40 },
-    labelXFontSize: 12,
-    labelYFontSize: 12,
-    tickRotation: 0,
-    barGap: 4
-  };
+  const displayData = isMobile && data.length > 10 ? data.slice(0, 8) : data;
   
-  // Reduce data points if on mobile and too many points
-  const displayData = mobile && data.length > 10 ? data.slice(0, 8) : data;
+  // Get all numeric keys if categories not provided
+  const dataKeys = categories.length > 0 ? categories : 
+    Object.keys(data[0] || {}).filter(key => 
+      key !== xAxisKey && typeof data[0]?.[key] === 'number'
+    );
   
   return (
     <div className={className}>
-      <BarChart
-        data={displayData}
-        categories={categories || [yAxisKey]}
-        index={xAxisKey}
-        colors={colors || ['blue', 'cyan']}
-        valueFormatter={(value) => `${value}`}
-        yAxisWidth={mobile ? 30 : 40}
-        showAnimation
-        showLegend={!mobile || displayData.length < 5}
-        showTooltip
-        showXAxis
-        showYAxis
-        startEndOnly={mobile && displayData.length > 5}
-        className="h-[300px]"
-        customTooltip={({ payload }) => payload && payload.length ? (
-          <div className="rounded-lg border bg-background p-2 shadow-md">
-            <div className="text-sm font-bold">{payload[0].payload[xAxisKey]}</div>
-            {payload.map((entry, index) => (
-              <div key={`item-${index}`} className="flex items-center gap-2 text-xs">
-                <div
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: entry.color }}
-                />
-                <span className="font-medium">{entry.name || yAxisKey}</span>
-                <span>{entry.value}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      />
+      <ChartContainer
+        config={{}}
+        className="h-[300px] w-full"
+      >
+        <BarChart data={displayData}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis 
+            dataKey={xAxisKey}
+            fontSize={isMobile ? 10 : 12}
+            angle={isMobile ? -45 : 0}
+            textAnchor={isMobile ? 'end' : 'middle'}
+            height={isMobile ? 60 : 40}
+          />
+          <YAxis fontSize={isMobile ? 10 : 12} width={isMobile ? 30 : 40} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          {dataKeys.map((key, index) => (
+            <Bar 
+              key={key}
+              dataKey={key} 
+              fill={colors[index % colors.length]}
+              name={key}
+            />
+          ))}
+        </BarChart>
+      </ChartContainer>
     </div>
   );
 };
@@ -80,7 +68,7 @@ export const MobileResponsiveBarChart: React.FC<MobileResponsiveBarChartProps> =
 interface MobileResponsiveLineChartProps {
   data: any[];
   xAxisKey: string;
-  yAxisKey: string;
+  yAxisKey?: string;
   name?: string;
   className?: string;
   categories?: string[];
@@ -93,33 +81,47 @@ export const MobileResponsiveLineChart: React.FC<MobileResponsiveLineChartProps>
   yAxisKey,
   name,
   className,
-  categories,
-  colors
+  categories = [],
+  colors = ['#8884d8', '#82ca9d', '#ffc658']
 }) => {
-  const mobile = isMobile();
+  const isMobile = useIsMobile();
   
   // Reduce data points if on mobile and too many points
-  const displayData = mobile && data.length > 12 ? 
+  const displayData = isMobile && data.length > 12 ? 
     data.filter((_, index) => index % Math.ceil(data.length / 10) === 0) : 
     data;
   
+  const dataKeys = categories.length > 0 ? categories : 
+    Object.keys(data[0] || {}).filter(key => 
+      key !== xAxisKey && typeof data[0]?.[key] === 'number'
+    );
+  
   return (
     <div className={className}>
-      <LineChart
-        data={displayData}
-        categories={categories || [yAxisKey]}
-        index={xAxisKey}
-        colors={colors || ['blue']}
-        valueFormatter={(value) => `${value}`}
-        yAxisWidth={mobile ? 30 : 40}
-        showAnimation
-        showLegend={!mobile}
-        showTooltip
-        showXAxis
-        showYAxis
-        startEndOnly={mobile && displayData.length > 8}
-        className="h-[300px]"
-      />
+      <ChartContainer
+        config={{}}
+        className="h-[300px] w-full"
+      >
+        <LineChart data={displayData}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis 
+            dataKey={xAxisKey}
+            fontSize={isMobile ? 10 : 12}
+          />
+          <YAxis fontSize={isMobile ? 10 : 12} width={isMobile ? 30 : 40} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          {dataKeys.map((key, index) => (
+            <Line 
+              key={key}
+              type="monotone" 
+              dataKey={key} 
+              stroke={colors[index % colors.length]}
+              strokeWidth={2}
+              name={key}
+            />
+          ))}
+        </LineChart>
+      </ChartContainer>
     </div>
   );
 };
@@ -135,67 +137,13 @@ export const MobileResponsivePieChart: React.FC<MobileResponsivePieChartProps> =
   data,
   category,
   className,
-  colors
+  colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1']
 }) => {
-  const mobile = isMobile();
+  const isMobile = useIsMobile();
   
   // For mobile, reduce the number of slices by grouping smaller values
   let displayData = data;
-  if (mobile && data.length > 6) {
-    // Sort by value descending
-    const sortedData = [...data].sort((a, b) => b[category] - a[category]);
-    
-    // Keep top 5 and group the rest
-    const topItems = sortedData.slice(0, 5);
-    const otherItems = sortedData.slice(5);
-    
-    const otherValue = otherItems.reduce((sum, item) => sum + item[category], 0);
-    
-    displayData = [
-      ...topItems,
-      { name: "Andere", [category]: otherValue }
-    ];
-  }
-  
-  return (
-    <div className={className}>
-      <PieChart
-        data={displayData}
-        category={category}
-        index="name"
-        colors={colors}
-        valueFormatter={(value) => `${value}`}
-        showAnimation
-        showTooltip
-        showLabel={!mobile}
-        label={mobile ? undefined : (item) => `${item.name}: ${item[category]}`}
-        className="h-[300px]"
-      />
-    </div>
-  );
-};
-
-interface MobileResponsiveDonutChartProps {
-  data: any[];
-  category: string;
-  className?: string;
-  colors?: string[];
-  variant?: 'pie' | 'donut';
-}
-
-export const MobileResponsiveDonutChart: React.FC<MobileResponsiveDonutChartProps> = ({
-  data,
-  category,
-  className,
-  colors,
-  variant = 'donut'
-}) => {
-  const mobile = isMobile();
-  
-  // For mobile, reduce the number of slices by grouping smaller values
-  let displayData = data;
-  if (mobile && data.length > 6) {
-    // Same logic as pie chart
+  if (isMobile && data.length > 6) {
     const sortedData = [...data].sort((a, b) => b[category] - a[category]);
     const topItems = sortedData.slice(0, 5);
     const otherItems = sortedData.slice(5);
@@ -209,19 +157,27 @@ export const MobileResponsiveDonutChart: React.FC<MobileResponsiveDonutChartProp
   
   return (
     <div className={className}>
-      <DonutChart
-        data={displayData}
-        category={category}
-        index="name"
-        colors={colors}
-        valueFormatter={(value) => `${value}`}
-        showAnimation
-        showTooltip
-        showLabel={!mobile}
-        label={mobile ? undefined : (item) => `${item.name}`}
-        variant={variant}
-        className="h-[300px]"
-      />
+      <ChartContainer
+        config={{}}
+        className="h-[300px] w-full"
+      >
+        <PieChart>
+          <Pie
+            data={displayData}
+            dataKey={category}
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            outerRadius={isMobile ? 60 : 80}
+            label={!isMobile}
+          >
+            {displayData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+            ))}
+          </Pie>
+          <ChartTooltip content={<ChartTooltipContent />} />
+        </PieChart>
+      </ChartContainer>
     </div>
   );
 };
@@ -229,7 +185,7 @@ export const MobileResponsiveDonutChart: React.FC<MobileResponsiveDonutChartProp
 interface MobileResponsiveAreaChartProps {
   data: any[];
   xAxisKey: string;
-  yAxisKey: string;
+  yAxisKey?: string;
   name?: string;
   className?: string;
   categories?: string[];
@@ -242,33 +198,49 @@ export const MobileResponsiveAreaChart: React.FC<MobileResponsiveAreaChartProps>
   yAxisKey,
   name,
   className,
-  categories,
-  colors
+  categories = [],
+  colors = ['#8884d8', '#82ca9d', '#ffc658']
 }) => {
-  const mobile = isMobile();
+  const isMobile = useIsMobile();
   
   // Reduce data points for mobile
-  const displayData = mobile && data.length > 12 ? 
+  const displayData = isMobile && data.length > 12 ? 
     data.filter((_, index) => index % Math.ceil(data.length / 8) === 0) : 
     data;
   
+  const dataKeys = categories.length > 0 ? categories : 
+    Object.keys(data[0] || {}).filter(key => 
+      key !== xAxisKey && typeof data[0]?.[key] === 'number'
+    );
+  
   return (
     <div className={className}>
-      <AreaChart
-        data={displayData}
-        categories={categories || [yAxisKey]}
-        index={xAxisKey}
-        colors={colors || ['blue']}
-        valueFormatter={(value) => `${value}`}
-        yAxisWidth={mobile ? 30 : 40}
-        showAnimation
-        showLegend={!mobile}
-        showTooltip
-        showXAxis
-        showYAxis
-        startEndOnly={mobile && displayData.length > 8}
-        className="h-[300px]"
-      />
+      <ChartContainer
+        config={{}}
+        className="h-[300px] w-full"
+      >
+        <AreaChart data={displayData}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis 
+            dataKey={xAxisKey}
+            fontSize={isMobile ? 10 : 12}
+          />
+          <YAxis fontSize={isMobile ? 10 : 12} width={isMobile ? 30 : 40} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          {dataKeys.map((key, index) => (
+            <Area 
+              key={key}
+              type="monotone" 
+              dataKey={key} 
+              stackId="1"
+              stroke={colors[index % colors.length]}
+              fill={colors[index % colors.length]}
+              fillOpacity={0.6}
+              name={key}
+            />
+          ))}
+        </AreaChart>
+      </ChartContainer>
     </div>
   );
 };
