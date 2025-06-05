@@ -45,6 +45,18 @@ export class MarketValidationAI {
     return JSON.parse(jsonMatch[0]);
   }
 
+  static async processPrompt(prompt: string): Promise<string> {
+    // This is a simplified version for now - in a real implementation,
+    // you would need to get the AI config from somewhere
+    const aiConfig: AIConfig = {
+      apiKey: 'dummy-key', // This should come from user config
+      model: 'gpt-3.5-turbo'
+    };
+
+    const result = await this.callOpenAI(prompt, aiConfig, 2000);
+    return JSON.stringify(result);
+  }
+
   static async analyzeWithContext(
     prompt: string,
     bookContext: BookContext
