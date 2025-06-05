@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { ReaderArchetype, AnalysisResult } from './BookAnalyzer';
 import { AIConfig } from './AIAnalysisService';
@@ -31,7 +30,7 @@ export class AnalysisController {
   private shouldStop = false;
   
   async runAnalysis(
-    pdfContent: string,
+    fileContent: string,
     archetypes: ReaderArchetype[],
     aiConfig: AIConfig,
     onProgress: (progress: AnalysisProgress) => void
@@ -44,7 +43,7 @@ export class AnalysisController {
     let tokenUsage = { prompt: 0, completion: 0 };
     
     // Enhanced text chunking
-    const chunks = TextChunker.createChunks(pdfContent, {
+    const chunks = TextChunker.createChunks(fileContent, {
       maxWordsPerChunk: 400,
       minWordsPerChunk: 150,
       preserveStructure: true

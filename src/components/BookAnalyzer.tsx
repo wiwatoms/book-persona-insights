@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PdfUploader } from './PdfUploader';
+import { FileUploader } from './FileUploader';
 import { ArchetypeManager } from './ArchetypeManager';
 import { AnalysisProgress } from './AnalysisProgress';
 import { ResultsDashboard } from './ResultsDashboard';
@@ -65,7 +65,7 @@ export interface AnalyticalInsight {
 
 export const BookAnalyzer = () => {
   const [activeTab, setActiveTab] = useState('upload');
-  const [pdfContent, setPdfContent] = useState<string>('');
+  const [fileContent, setFileContent] = useState<string>('');
   const [archetypes, setArchetypes] = useState<ReaderArchetype[]>([]);
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [streamOfThoughtResults, setStreamOfThoughtResults] = useState<StreamOfThoughtResult[]>([]);
@@ -80,8 +80,8 @@ export const BookAnalyzer = () => {
     { id: 'compile', name: 'Ergebnisse zusammenfassen', status: 'pending' as const, progress: 0 }
   ];
 
-  const handlePdfUploaded = (content: string) => {
-    setPdfContent(content);
+  const handleFileUploaded = (content: string) => {
+    setFileContent(content);
     setActiveTab('archetypes');
   };
 
@@ -115,12 +115,12 @@ export const BookAnalyzer = () => {
             className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
           >
             <FileText className="w-4 h-4" />
-            <span className="hidden sm:inline">PDF Upload</span>
-            <span className="sm:hidden">PDF</span>
+            <span className="hidden sm:inline">Datei Upload</span>
+            <span className="sm:hidden">Datei</span>
           </TabsTrigger>
           <TabsTrigger 
             value="archetypes"
-            disabled={!pdfContent}
+            disabled={!fileContent}
             className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
           >
             <Users className="w-4 h-4" />
@@ -158,10 +158,10 @@ export const BookAnalyzer = () => {
         <TabsContent value="upload" className="space-y-6">
           <Card className="bg-white/70 backdrop-blur-sm border-slate-200">
             <CardHeader>
-              <CardTitle className="text-2xl text-slate-800">Buchmanuskript hochladen</CardTitle>
+              <CardTitle className="text-2xl text-slate-800">Manuskript hochladen</CardTitle>
             </CardHeader>
             <CardContent>
-              <PdfUploader onPdfUploaded={handlePdfUploaded} />
+              <FileUploader onFileUploaded={handleFileUploaded} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -175,12 +175,12 @@ export const BookAnalyzer = () => {
               {advancedMode ? (
                 <AdvancedArchetypeManager 
                   onArchetypesReady={handleArchetypesReady}
-                  textPreview={pdfContent.substring(0, 500) + '...'}
+                  textPreview={fileContent.substring(0, 500) + '...'}
                 />
               ) : (
                 <ArchetypeManager 
                   onArchetypesReady={handleArchetypesReady}
-                  textPreview={pdfContent.substring(0, 500) + '...'}
+                  textPreview={fileContent.substring(0, 500) + '...'}
                 />
               )}
             </CardContent>

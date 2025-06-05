@@ -1,4 +1,3 @@
-
 export interface BackgroundJob {
   id: string;
   type: 'analysis';
@@ -69,14 +68,14 @@ export class BackgroundJobManager {
   }
 
   private async processAnalysisJob(job: BackgroundJob): Promise<void> {
-    const { pdfContent, archetypes, aiConfig } = job.data;
+    const { fileContent, archetypes, aiConfig } = job.data;
     const { AnalysisController } = await import('../components/AnalysisEngine');
     const { TextChunker } = await import('./textChunking');
     
     const controller = new AnalysisController();
     
     // Create chunks
-    const chunks = TextChunker.createChunks(pdfContent, {
+    const chunks = TextChunker.createChunks(fileContent, {
       maxWordsPerChunk: 400,
       minWordsPerChunk: 150,
       preserveStructure: true
