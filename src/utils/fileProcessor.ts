@@ -1,5 +1,4 @@
-
-import { getDocument } from 'react-pdf/dist/esm/entry.webpack5';
+import { getDocument } from 'react-pdf';
 
 export interface FileProcessingResult {
   content: string;

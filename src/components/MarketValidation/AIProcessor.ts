@@ -1,4 +1,3 @@
-
 import { AIConfig } from '../AIAnalysisService';
 import { BookContext, MarketPosition, TrendAnalysis, ReaderPersona } from './types';
 
@@ -44,6 +43,27 @@ export class MarketValidationAI {
     }
 
     return JSON.parse(jsonMatch[0]);
+  }
+
+  static async analyzeWithContext(
+    prompt: string,
+    bookContext: BookContext
+  ): Promise<string> {
+    // This is a simplified version for now - in a real implementation,
+    // you would need to get the AI config from somewhere
+    const aiConfig: AIConfig = {
+      apiKey: 'dummy-key', // This should come from user config
+      model: 'gpt-3.5-turbo'
+    };
+
+    const contextualPrompt = `
+      ${prompt}
+      
+      Please analyze this in the context of the uploaded book.
+    `;
+
+    const result = await this.callOpenAI(contextualPrompt, aiConfig, 2000);
+    return JSON.stringify(result);
   }
 
   static async analyzeLiteraryLandscape(
@@ -165,3 +185,6 @@ Antworte in diesem JSON-Format:
     return response.personas;
   }
 }
+
+// Export as AIProcessor for backward compatibility
+export const AIProcessor = MarketValidationAI;

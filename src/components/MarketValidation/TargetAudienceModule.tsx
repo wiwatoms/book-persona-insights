@@ -1,35 +1,40 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Users, Edit3, Check } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Play } from 'lucide-react';
 import { useBookContext } from './BookContextProvider';
 import { MarketValidationAI } from './AIProcessor';
-import { AIConfig } from '../AIAnalysisService';
 import { MarketPosition, ReaderPersona } from './types';
-import { toast } from 'sonner';
 
 interface TargetAudienceModuleProps {
-  aiConfig: AIConfig;
-  marketPosition: MarketPosition;
-  onPersonasReady: (personas: ReaderPersona[]) => void;
+  marketPosition: MarketPosition | null;
+  onComplete: (personas: ReaderPersona[]) => void;
 }
 
 export const TargetAudienceModule: React.FC<TargetAudienceModuleProps> = ({
-  aiConfig,
   marketPosition,
-  onPersonasReady
+  onComplete
 }) => {
   const bookContext = useBookContext();
   const [isGenerating, setIsGenerating] = useState(false);
   const [personas, setPersonas] = useState<ReaderPersona[]>([]);
-  const [selectedPersonas, setSelectedPersonas] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const generatePersonas = async () => {
+    if (!marketPosition) {
+      setError('Bitte führen Sie zuerst die Marktanalyse durch.');
+      return;
+    }
+
     setIsGenerating(true);
+    setError(null);
+
     try {
+      // This would need actual AI configuration - for now using dummy config
+      const aiConfig = { apiKey: 'dummy', model: 'gpt-3.5-turbo' };
+      
       const generatedPersonas = await MarketValidationAI.generateTargetPersonas(
         bookContext,
         marketPosition,
@@ -37,153 +42,109 @@ export const TargetAudienceModule: React.FC<TargetAudienceModuleProps> = ({
       );
       
       setPersonas(generatedPersonas);
-      toast.success("Leser-Personas erfolgreich generiert!");
+      onComplete(generatedPersonas);
     } catch (error) {
-      toast.error("Fehler bei der Persona-Generierung: " + (error instanceof Error ? error.message : 'Unbekannter Fehler'));
+      console.error('Persona generation error:', error);
+      setError('Fehler bei der Persona-Generierung. Bitte versuchen Sie es erneut.');
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  const togglePersonaSelection = (personaId: string) => {
-    setSelectedPersonas(prev => 
-      prev.includes(personaId) 
-        ? prev.filter(id => id !== personaId)
-        : [...prev, personaId]
-    );
-  };
-
-  const confirmSelection = () => {
-    const selected = personas.filter(p => selectedPersonas.includes(p.id));
-    if (selected.length === 0) {
-      toast.error("Bitte wählen Sie mindestens eine Persona aus.");
-      return;
-    }
-    onPersonasReady(selected);
   };
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            AI Target Audience Persona Generator
-          </CardTitle>
+          <CardTitle>Zielgruppen-Personas</CardTitle>
+          <p className="text-sm text-gray-600">
+            Generiere detaillierte Leser-Personas basierend auf deinem Buch und der Marktpositionierung
+          </p>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <AlertDescription>
-              Basierend auf Ihrem Buchinhalt und der Marktpositionierung "{marketPosition.genre}" 
-              werden spezifische Leser-Personas generiert, die von Ihrem Buch angezogen würden.
-            </AlertDescription>
-          </Alert>
-
-          {personas.length === 0 ? (
-            <Button 
-              onClick={generatePersonas} 
-              disabled={isGenerating}
-              className="w-full"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Generiere Personas basierend auf Ihrem Buch...
-                </>
-              ) : (
-                'Zielgruppen-Personas generieren'
-              )}
-            </Button>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-semibold">Generierte Personas für Ihr Buch</h3>
-                <Button onClick={generatePersonas} variant="outline" size="sm">
-                  <Edit3 className="w-4 h-4 mr-2" />
-                  Neu generieren
-                </Button>
-              </div>
-
-              <div className="grid gap-4">
-                {personas.map((persona) => (
-                  <Card 
-                    key={persona.id} 
-                    className={`cursor-pointer transition-colors ${
-                      selectedPersonas.includes(persona.id) 
-                        ? 'border-blue-500 bg-blue-50' 
-                        : 'hover:border-gray-300'
-                    }`}
-                    onClick={() => togglePersonaSelection(persona.id)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h4 className="font-semibold text-lg">{persona.name}</h4>
-                          <p className="text-sm text-gray-600">
-                            {persona.demographics.ageRange}, {persona.demographics.gender}, {persona.demographics.occupation}
-                          </p>
-                        </div>
-                        {selectedPersonas.includes(persona.id) && (
-                          <Check className="w-5 h-5 text-blue-600" />
-                        )}
-                      </div>
-
-                      <div className="space-y-3">
-                        <div>
-                          <h5 className="font-medium text-sm">Verbindung zu Ihrem Buch:</h5>
-                          <ul className="text-sm text-gray-700 list-disc pl-4">
-                            {persona.bookConnectionPoints.map((point, index) => (
-                              <li key={index}>{point}</li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <h5 className="font-medium text-sm">Lieblingsgenres:</h5>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {persona.readingHabits.favoriteGenres.slice(0, 3).map((genre, index) => (
-                                <Badge key={index} variant="outline" className="text-xs">{genre}</Badge>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <h5 className="font-medium text-sm">Motivationen:</h5>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {persona.psychographics.motivations.slice(0, 2).map((motivation, index) => (
-                                <Badge key={index} variant="secondary" className="text-xs">{motivation}</Badge>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h5 className="font-medium text-sm">Lesehäufigkeit:</h5>
-                          <p className="text-sm text-gray-600">{persona.readingHabits.frequency}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              <div className="pt-4 border-t">
-                <p className="text-sm text-gray-600 mb-3">
-                  Wählen Sie die Personas aus, die Sie für weitere Analysen verwenden möchten.
-                  Ausgewählt: {selectedPersonas.length} von {personas.length}
-                </p>
-                <Button 
-                  onClick={confirmSelection}
-                  disabled={selectedPersonas.length === 0}
-                  className="w-full"
-                >
-                  Mit ausgewählten Personas fortfahren
-                </Button>
+        <CardContent className="space-y-6">
+          {marketPosition && (
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h4 className="font-medium text-blue-900 mb-2">Aktuelle Marktpositionierung</h4>
+              <div className="space-y-2">
+                <p className="text-sm"><strong>Genre:</strong> {marketPosition.genre}</p>
+                <div className="flex flex-wrap gap-1">
+                  <span className="text-sm font-medium">Sub-Genres:</span>
+                  {marketPosition.subGenres.map((subGenre, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {subGenre}
+                    </Badge>
+                  ))}
+                </div>
               </div>
             </div>
           )}
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <Button 
+            onClick={generatePersonas}
+            disabled={isGenerating || !marketPosition}
+            className="w-full"
+          >
+            <Play className="w-4 h-4 mr-2" />
+            {isGenerating ? 'Generiere Personas...' : 'Leser-Personas generieren'}
+          </Button>
         </CardContent>
       </Card>
+
+      {/* Personas Display */}
+      {personas.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Generierte Leser-Personas</h3>
+          {personas.map((persona) => (
+            <Card key={persona.id}>
+              <CardHeader>
+                <CardTitle className="text-base">{persona.name}</CardTitle>
+                <p className="text-sm text-gray-600">{persona.description}</p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Demografische Daten</h4>
+                    <div className="text-sm space-y-1">
+                      <p><strong>Alter:</strong> {persona.demographics.ageRange}</p>
+                      <p><strong>Geschlecht:</strong> {persona.demographics.gender}</p>
+                      <p><strong>Bildung:</strong> {persona.demographics.education}</p>
+                      <p><strong>Beruf:</strong> {persona.demographics.occupation}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-2">Lesegewohnheiten</h4>
+                    <div className="text-sm space-y-1">
+                      <p><strong>Häufigkeit:</strong> {persona.readingHabits.frequency}</p>
+                      <p><strong>Formate:</strong> {persona.readingHabits.preferredFormats.join(', ')}</p>
+                      <p><strong>Lieblings-Genres:</strong> {persona.readingHabits.favoriteGenres.join(', ')}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-2">Psychografie</h4>
+                    <div className="text-sm space-y-1">
+                      <p><strong>Werte:</strong> {persona.psychographics.values.join(', ')}</p>
+                      <p><strong>Motivationen:</strong> {persona.psychographics.motivations.join(', ')}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-2">Buchverbindungen</h4>
+                    <ul className="text-sm list-disc list-inside">
+                      {persona.bookConnectionPoints.map((point, index) => (
+                        <li key={index}>{point}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
