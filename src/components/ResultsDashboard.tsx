@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +20,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 }) => {
   const [selectedArchetype, setSelectedArchetype] = useState<string>('all');
 
-  // Calculate aggregate metrics
+  // Calculate aggregate metrics with updated 1-10 scale
   const getAggregateMetrics = () => {
     const archetypeMetrics = archetypes.map(archetype => {
       const archetypeResults = results.filter(r => r.archetypeId === archetype.id);
@@ -58,7 +57,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
   const overallAvgRating = aggregateMetrics.reduce((sum, m) => sum + m.finalRating, 0) / aggregateMetrics.length;
   const overallBuyingProb = aggregateMetrics.reduce((sum, m) => sum + m.finalBuying, 0) / aggregateMetrics.length;
 
-  // Data for charts
+  // Data for charts - updated for 1-10 scale
   const ratingProgressData = archetypes.map(archetype => {
     const archetypeResults = results.filter(r => r.archetypeId === archetype.id);
     return {
@@ -111,7 +110,8 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         totalAnalyzedChunks: results.length,
         textLength,
         overallRating: Math.round(overallAvgRating * 10) / 10,
-        overallBuyingProbability: Math.round(overallBuyingProb)
+        overallBuyingProbability: Math.round(overallBuyingProb),
+        ratingScale: "1-10 (updated scale)"
       },
       archetypeResults: aggregateMetrics,
       detailedResults: results
@@ -128,7 +128,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
+      {/* Summary Cards - updated for 1-10 scale */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
           <CardContent className="p-6">
@@ -136,8 +136,9 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
               <div>
                 <p className="text-sm text-blue-600 font-medium">Gesamtbewertung</p>
                 <p className="text-3xl font-bold text-blue-800">
-                  {Math.round(overallAvgRating * 10) / 10}/5
+                  {Math.round(overallAvgRating * 10) / 10}/10
                 </p>
+                <p className="text-xs text-blue-500">Neue 1-10 Skala</p>
               </div>
               <Star className="w-8 h-8 text-blue-600" />
             </div>
@@ -204,17 +205,17 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         </div>
 
         <TabsContent value="overview" className="space-y-6">
-          {/* Archetype Comparison Chart */}
+          {/* Archetype Comparison Chart - updated for 1-10 scale */}
           <Card>
             <CardHeader>
-              <CardTitle>Bewertung nach Kategorien</CardTitle>
+              <CardTitle>Bewertung nach Kategorien (1-10 Skala)</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={400}>
                 <RadarChart data={categoryComparisonData}>
                   <PolarGrid />
                   <PolarAngleAxis dataKey="archetype" />
-                  <PolarRadiusAxis angle={90} domain={[0, 5]} />
+                  <PolarRadiusAxis angle={90} domain={[0, 10]} />
                   <Radar name="Engagement" dataKey="engagement" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.1} />
                   <Radar name="Stil" dataKey="style" stroke="#10B981" fill="#10B981" fillOpacity={0.1} />
                   <Radar name="Klarheit" dataKey="clarity" stroke="#F59E0B" fill="#F59E0B" fillOpacity={0.1} />
@@ -226,10 +227,10 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             </CardContent>
           </Card>
 
-          {/* Final Ratings Bar Chart */}
+          {/* Final Ratings Bar Chart - updated for 1-10 scale */}
           <Card>
             <CardHeader>
-              <CardTitle>Finale Bewertungen der Archetypen</CardTitle>
+              <CardTitle>Finale Bewertungen der Archetypen (1-10 Skala)</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -242,7 +243,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                     height={80}
                     interval={0}
                   />
-                  <YAxis domain={[0, 5]} />
+                  <YAxis domain={[0, 10]} />
                   <Tooltip 
                     formatter={(value: number) => [value, 'Bewertung']}
                     labelFormatter={(label) => `Archetyp: ${label}`}
@@ -255,7 +256,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         </TabsContent>
 
         <TabsContent value="archetypes" className="space-y-6">
-          {/* Individual Archetype Cards */}
+          {/* Individual Archetype Cards - updated for 1-10 scale */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {aggregateMetrics.map((metric) => (
               <Card key={metric.archetype.id} className="border-slate-200">
@@ -276,8 +277,9 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center p-3 bg-slate-50 rounded">
-                      <div className="text-2xl font-bold text-slate-800">{metric.finalRating}/5</div>
+                      <div className="text-2xl font-bold text-slate-800">{metric.finalRating}/10</div>
                       <div className="text-sm text-slate-600">Finale Bewertung</div>
+                      <div className="text-xs text-slate-500">1-10 Skala</div>
                     </div>
                     <div className="text-center p-3 bg-slate-50 rounded">
                       <div className="text-2xl font-bold text-slate-800">{metric.finalBuying}%</div>
@@ -301,18 +303,18 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         </TabsContent>
 
         <TabsContent value="progress" className="space-y-6">
-          {/* Progress Charts for each archetype */}
+          {/* Progress Charts for each archetype - updated for 1-10 scale */}
           {ratingProgressData.map((archetypeData) => (
             <Card key={archetypeData.name}>
               <CardHeader>
-                <CardTitle>Bewertungsverlauf: {archetypeData.name}</CardTitle>
+                <CardTitle>Bewertungsverlauf: {archetypeData.name} (1-10 Skala)</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={archetypeData.data}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="chunk" />
-                    <YAxis yAxisId="rating" orientation="left" domain={[0, 5]} />
+                    <YAxis yAxisId="rating" orientation="left" domain={[0, 10]} />
                     <YAxis yAxisId="percent" orientation="right" domain={[0, 100]} />
                     <Tooltip />
                     <Line 
@@ -321,7 +323,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                       dataKey="rating" 
                       stroke="#3B82F6" 
                       strokeWidth={2}
-                      name="Bewertung (1-5)"
+                      name="Bewertung (1-10)"
                     />
                     <Line 
                       yAxisId="percent"

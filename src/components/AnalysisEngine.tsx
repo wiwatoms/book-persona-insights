@@ -2,6 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { ReaderArchetype, AnalysisResult } from './BookAnalyzer';
 import { AIConfig } from './AIAnalysisService';
+import { TextChunker } from '../utils/textChunking';
 
 interface AnalysisEngineProps {
   pdfContent: string;
@@ -22,6 +23,7 @@ export interface AnalysisProgress {
   results: AnalysisResult[];
   apiCalls: number;
   tokenUsage: { prompt: number; completion: number };
+  chunkingSummary?: string;
 }
 
 export class AnalysisController {
@@ -41,8 +43,16 @@ export class AnalysisController {
     let apiCalls = 0;
     let tokenUsage = { prompt: 0, completion: 0 };
     
-    // Split text into manageable chunks
-    const chunks = this.createTextChunks(pdfContent);
+    // Enhanced text chunking
+    const chunks = TextChunker.createChunks(pdfContent, {
+      maxWordsPerChunk: 400,
+      minWordsPerChunk: 150,
+      preserveStructure: true
+    });
+    
+    const chunkingSummary = TextChunker.getChunkingSummary(chunks);
+    console.log('Chunking summary:', chunkingSummary);
+    
     const totalSteps = archetypes.length * chunks.length;
     
     let currentStep = 0;
@@ -56,7 +66,8 @@ export class AnalysisController {
       status: `Starte Analyse: ${archetypes.length} Archetypen × ${chunks.length} Abschnitte`,
       results: [],
       apiCalls: 0,
-      tokenUsage
+      tokenUsage,
+      chunkingSummary
     });
 
     for (let archetypeIndex = 0; archetypeIndex < archetypes.length && !this.shouldStop; archetypeIndex++) {
@@ -71,12 +82,17 @@ export class AnalysisController {
         status: `Analysiere "${archetype.name}"`,
         results: [...results],
         apiCalls,
-        tokenUsage
+        tokenUsage,
+        chunkingSummary
       });
 
       for (let chunkIndex = 0; chunkIndex < chunks.length && !this.shouldStop; chunkIndex++) {
         currentStep++;
         const chunk = chunks[chunkIndex];
+        
+        const chunkDescription = chunk.title ? 
+          `"${chunk.title}" (${chunk.wordCount} Wörter)` : 
+          `Abschnitt ${chunkIndex + 1} (${chunk.wordCount} Wörter)`;
         
         onProgress({
           currentStep,
@@ -84,14 +100,15 @@ export class AnalysisController {
           currentArchetype: archetype.name,
           currentChunk: chunkIndex + 1,
           totalChunks: chunks.length,
-          status: `${archetype.name}: Abschnitt ${chunkIndex + 1}/${chunks.length}`,
+          status: `${archetype.name}: ${chunkDescription}`,
           results: [...results],
           apiCalls,
-          tokenUsage
+          tokenUsage,
+          chunkingSummary
         });
 
         try {
-          const result = await this.callOpenAI(archetype, chunk, chunkIndex, aiConfig);
+          const result = await this.callOpenAI(archetype, chunk.content, chunkIndex, aiConfig);
           results.push(result);
           apiCalls++;
           
@@ -107,10 +124,11 @@ export class AnalysisController {
             currentArchetype: archetype.name,
             currentChunk: chunkIndex + 1,
             totalChunks: chunks.length,
-            status: `✅ Abschnitt ${chunkIndex + 1} analysiert (${result.overallRating.toFixed(1)}/5)`,
+            status: `✅ ${chunkDescription} analysiert (${result.overallRating.toFixed(1)}/10)`,
             results: [...results],
             apiCalls,
-            tokenUsage
+            tokenUsage,
+            chunkingSummary
           });
           
           // Small delay to prevent rate limiting
@@ -125,10 +143,11 @@ export class AnalysisController {
             currentArchetype: archetype.name,
             currentChunk: chunkIndex + 1,
             totalChunks: chunks.length,
-            status: `⚠️ Fehler bei Abschnitt ${chunkIndex + 1}: ${errorMsg}`,
+            status: `⚠️ Fehler bei ${chunkDescription}: ${errorMsg}`,
             results: [...results],
             apiCalls,
-            tokenUsage
+            tokenUsage,
+            chunkingSummary
           });
           
           // Continue with next chunk instead of stopping
@@ -147,21 +166,6 @@ export class AnalysisController {
   
   isAnalysisRunning(): boolean {
     return this.isRunning;
-  }
-  
-  private createTextChunks(content: string): string[] {
-    const wordsPerChunk = 400;
-    const words = content.trim().split(/\s+/);
-    const chunks: string[] = [];
-    
-    for (let i = 0; i < words.length; i += wordsPerChunk) {
-      const chunk = words.slice(i, i + wordsPerChunk).join(' ');
-      if (chunk.trim().length > 50) {
-        chunks.push(chunk);
-      }
-    }
-    
-    return chunks;
   }
   
   private async callOpenAI(
@@ -252,14 +256,14 @@ Analysiere diesen Textabschnitt aus deiner Persona-Perspektive:
 
 "${chunk}"
 
-Bewerte auf Skala 1-5 (Dezimalstellen erlaubt):
+Bewerte auf Skala 1-10 (Dezimalstellen erlaubt, z.B. 7.3):
 - Engagement: Wie fesselnd ist der Text?
 - Stil: Wie gefällt dir der Schreibstil?
 - Klarheit: Wie verständlich ist der Text?
 - Tempo: Wie ist das Erzähltempo?
 - Relevanz: Wie relevant ist der Inhalt für dich?
 
-Schätze (0-1 als Dezimalzahl):
+Schätze (0-1 als Dezimalzahl, z.B. 0.75):
 - Kaufwahrscheinlichkeit: Würdest du das Buch kaufen?
 - Weiterempfehlungswahrscheinlichkeit: Würdest du es weiterempfehlen?
 

@@ -23,16 +23,16 @@ export interface AnalysisResult {
   archetypeId: string;
   chunkIndex: number;
   ratings: {
-    engagement: number;
-    style: number;
-    clarity: number;
-    pacing: number;
-    relevance: number;
+    engagement: number; // 1-10 scale
+    style: number; // 1-10 scale
+    clarity: number; // 1-10 scale
+    pacing: number; // 1-10 scale
+    relevance: number; // 1-10 scale
   };
-  overallRating: number;
+  overallRating: number; // 1-10 scale
   feedback: string;
-  buyingProbability: number;
-  recommendationLikelihood: number;
+  buyingProbability: number; // 0-1 scale
+  recommendationLikelihood: number; // 0-1 scale
   expectedReviewSentiment: 'positive' | 'neutral' | 'negative';
   marketingInsights: string[];
 }

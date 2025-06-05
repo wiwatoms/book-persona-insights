@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Brain, Clock, Zap, TrendingUp } from 'lucide-react';
+import { Brain, Clock, Zap, TrendingUp, FileText } from 'lucide-react';
 import { AnalysisProgress } from './AnalysisEngine';
 import { ReaderArchetype, AnalysisResult } from './BookAnalyzer';
 
@@ -28,6 +28,16 @@ export const AnalysisProgressDisplay: React.FC<AnalysisProgressDisplayProps> = (
           <strong>Status:</strong> {progress.status}
         </AlertDescription>
       </Alert>
+
+      {/* Chunking Summary */}
+      {progress.chunkingSummary && (
+        <Alert className="bg-green-50 border-green-200">
+          <FileText className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">
+            <strong>Text-Aufteilung:</strong> {progress.chunkingSummary}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Progress Overview */}
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
@@ -99,27 +109,37 @@ export const AnalysisProgressDisplay: React.FC<AnalysisProgressDisplayProps> = (
             </div>
           )}
 
-          {/* Recent Results */}
+          {/* Recent Results with 1-10 scale display */}
           {progress.results.length > 0 && (
             <div className="space-y-3">
               <h4 className="font-medium flex items-center gap-2">
                 <TrendingUp className="w-4 h-4" />
-                Neueste Bewertungen:
+                Neueste Bewertungen (1-10 Skala):
               </h4>
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {progress.results.slice(-5).reverse().map((result, idx) => {
                   const archetype = archetypes.find(a => a.id === result.archetypeId);
+                  const ratingColor = result.overallRating >= 7 ? 'text-green-600' : 
+                                    result.overallRating >= 5 ? 'text-yellow-600' : 'text-red-600';
+                  
                   return (
                     <div key={idx} className="bg-slate-50 p-3 rounded text-sm border-l-4 border-blue-400">
                       <div className="flex justify-between items-center mb-1">
                         <Badge variant="secondary">{archetype?.name}</Badge>
-                        <div className="flex gap-2">
-                          <span className="font-medium">{result.overallRating.toFixed(1)}/5 ⭐</span>
+                        <div className="flex gap-2 items-center">
+                          <span className={`font-medium ${ratingColor}`}>
+                            {result.overallRating.toFixed(1)}/10
+                          </span>
                           <span className="text-xs text-slate-500">
                             {result.expectedReviewSentiment === 'positive' ? '😊' : 
                              result.expectedReviewSentiment === 'negative' ? '😞' : '😐'}
                           </span>
                         </div>
+                      </div>
+                      <div className="text-xs text-slate-500 mb-1">
+                        Engagement: {result.ratings.engagement}/10 • 
+                        Stil: {result.ratings.style}/10 • 
+                        Kaufwahrscheinlichkeit: {Math.round(result.buyingProbability * 100)}%
                       </div>
                       <p className="text-slate-600">{result.feedback.substring(0, 120)}...</p>
                     </div>
