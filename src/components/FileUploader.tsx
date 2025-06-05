@@ -17,7 +17,6 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileUploaded }) =>
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [fileInfo, setFileInfo] = useState<{
-    pages?: number;
     wordCount: number;
     size: string;
     fileType: string;
@@ -26,19 +25,17 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileUploaded }) =>
   const { toast } = useToast();
 
   const handleFileUpload = async (file: File) => {
-    // Validate file type
-    const isValidFile = file.type === 'application/pdf' || 
-                       file.type === 'text/plain' || 
-                       file.name.endsWith('.txt');
+    // Validate file type - only TXT files now
+    const isValidFile = file.type === 'text/plain' || file.name.endsWith('.txt');
     
     if (!isValidFile) {
       setError(FileProcessor.getErrorMessage('UNSUPPORTED_FILE_TYPE', file.name));
       return;
     }
 
-    // Check file size (50MB limit)
-    if (file.size > 50 * 1024 * 1024) {
-      setError('Die Datei ist zu groß. Bitte verwenden Sie eine Datei unter 50MB.');
+    // Check file size (10MB limit for text files)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Die Datei ist zu groß. Bitte verwenden Sie eine TXT-Datei unter 10MB.');
       return;
     }
 
@@ -47,7 +44,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileUploaded }) =>
     setError(null);
     setFileInfo(null);
 
-    console.log('Processing file:', file.name, file.type, file.size);
+    console.log('Processing text file:', file.name, file.type, file.size);
 
     try {
       setUploadProgress(20);
@@ -89,15 +86,13 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileUploaded }) =>
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files);
     const validFile = files.find(file => 
-      file.type === 'application/pdf' || 
-      file.type === 'text/plain' || 
-      file.name.endsWith('.txt')
+      file.type === 'text/plain' || file.name.endsWith('.txt')
     );
     
     if (validFile) {
       handleFileUpload(validFile);
     } else {
-      setError('Bitte wählen Sie eine PDF- oder TXT-Datei aus.');
+      setError('Bitte wählen Sie eine TXT-Datei aus.');
     }
   }, []);
 
@@ -124,12 +119,12 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileUploaded }) =>
                 Manuskript hochladen
               </h3>
               <p className="text-sm text-slate-600 mb-4">
-                Ziehen Sie Ihre Datei hierher oder klicken Sie zum Auswählen
+                Ziehen Sie Ihre TXT-Datei hierher oder klicken Sie zum Auswählen
               </p>
               
               <input
                 type="file"
-                accept=".pdf,.txt,text/plain,application/pdf"
+                accept=".txt,text/plain"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) handleFileUpload(file);
@@ -146,13 +141,13 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileUploaded }) =>
               >
                 <label htmlFor="file-upload" className="cursor-pointer">
                   <FileText className="w-4 h-4 mr-2" />
-                  Datei auswählen
+                  TXT-Datei auswählen
                 </label>
               </Button>
             </div>
             
             <p className="text-xs text-slate-500">
-              Unterstützte Formate: PDF, TXT (max. 50MB)
+              Unterstützte Formate: TXT (max. 10MB)
             </p>
           </div>
         </CardContent>
@@ -183,8 +178,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileUploaded }) =>
         <Alert className="bg-green-50 border-green-200">
           <CheckCircle2 className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-800">
-            <strong>Erfolgreich verarbeitet:</strong> {fileInfo.fileType}
-            {fileInfo.pages && `, ${fileInfo.pages} Seiten`}, {fileInfo.wordCount} Wörter ({fileInfo.size})
+            <strong>Erfolgreich verarbeitet:</strong> {fileInfo.fileType}, {fileInfo.wordCount} Wörter ({fileInfo.size})
           </AlertDescription>
         </Alert>
       )}
@@ -203,8 +197,8 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileUploaded }) =>
       <Alert className="bg-slate-50 border-slate-200">
         <Info className="h-4 w-4 text-slate-600" />
         <AlertDescription className="text-slate-700">
-          <strong>Tipp:</strong> Sie können sowohl PDF- als auch TXT-Dateien hochladen. 
-          Bei Problemen mit PDFs können Sie den Text einfach kopieren und als TXT-Datei speichern.
+          <strong>Hinweis:</strong> PDF-Funktionalität wurde temporär entfernt. 
+          Bitte kopieren Sie Ihren Text und speichern Sie ihn als TXT-Datei.
         </AlertDescription>
       </Alert>
     </div>

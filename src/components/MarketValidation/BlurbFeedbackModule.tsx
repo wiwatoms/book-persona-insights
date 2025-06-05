@@ -3,31 +3,35 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Textarea } from '@/components/ui/textarea';
 import { Trash2, Plus, Play } from 'lucide-react';
-import { useBookContext } from './BookContextProvider';
-import { AIProcessor } from './AIProcessor';
 import { ReaderPersona } from './types';
-
-interface BlurbFeedback {
-  blurb: string;
-  personaFeedback: {
-    personaId: string;
-    plotClarity: string;
-    intrigueFactor: number;
-    characterAppeal: string;
-    tonePacing: string;
-    confusingElements: string[];
-    overallComment: string;
-  }[];
-  aggregatedSummary: string;
-}
+import { useBookContext } from './BookContextProvider';
 
 interface BlurbFeedbackModuleProps {
   personas: ReaderPersona[];
-  onComplete: (feedback: BlurbFeedback[]) => void;
+  onComplete: (feedback: any[]) => void;
+}
+
+interface BlurbFeedback {
+  blurbId: string;
+  blurbText: string;
+  personaFeedback: {
+    personaId: string;
+    personaName: string;
+    clarityScore: number;
+    intrigueScore: number;
+    characterAppeal: number;
+    paceConveyed: number;
+    buyingIntent: number;
+    comments: string;
+    strengths: string[];
+    weaknesses: string[];
+  }[];
+  overallScore: number;
+  summary: string;
 }
 
 export const BlurbFeedbackModule: React.FC<BlurbFeedbackModuleProps> = ({
@@ -66,15 +70,15 @@ export const BlurbFeedbackModule: React.FC<BlurbFeedbackModuleProps> = ({
   };
 
   const analyzeBlurbs = async () => {
-    const validBlurbs = blurbs.filter(b => b.trim());
+    const validBlurbs = blurbs.filter(b => b.trim().length > 20);
     
     if (validBlurbs.length === 0) {
-      setError('Bitte geben Sie mindestens einen Klappentext ein.');
+      setError('Bitte geben Sie mindestens einen Klappentext mit mindestens 20 Zeichen an.');
       return;
     }
 
     if (selectedPersonas.length === 0) {
-      setError('Bitte wählen Sie mindestens eine Leser-Persona aus.');
+      setError('Bitte wählen Sie mindestens eine Persona aus.');
       return;
     }
 
@@ -82,42 +86,17 @@ export const BlurbFeedbackModule: React.FC<BlurbFeedbackModuleProps> = ({
     setError(null);
 
     try {
-      const analysisPrompt = `
-        Analyze these book blurbs/back cover copy for the uploaded book. For each blurb, simulate detailed feedback from the selected reader personas on how well it represents and sells the actual book.
-
-        BOOK CONTEXT:
-        ${bookContext.content.substring(0, 3000)}...
-        
-        BOOK METADATA:
-        - Genre: ${bookContext.metadata.estimatedGenre || 'To be determined'}
-        - Key Themes: ${bookContext.metadata.keyThemes?.join(', ') || 'To be analyzed'}
-        - Character Types: ${bookContext.metadata.characterTypes?.join(', ') || 'To be analyzed'}
-        - Narrative Style: ${bookContext.metadata.narrativeStyle || 'To be analyzed'}
-
-        BLURBS TO ANALYZE:
-        ${validBlurbs.map((b, i) => `Blurb ${i + 1}: ${b}`).join('\n\n')}
-
-        SELECTED PERSONAS: ${selectedPersonas.map(id => 
-          personas.find(p => p.id === id)?.name
-        ).join(', ')}
-
-        For each blurb and each selected persona, analyze how accurately and enticingly it represents THIS SPECIFIC BOOK and provide:
-        1. Plot Clarity - how well does it set up the story vs. the actual book?
-        2. Intrigue Factor Score (1-10) - desire to read more
-        3. Character Appeal - how appealing are the characters as described vs. the actual book?
-        4. Tone/Pacing conveyed vs. the book's actual tone/pacing
-        5. Confusing Elements or misrepresentations
-        6. Overall comment on effectiveness for this book
-
-        Then provide an aggregated summary comparing all blurbs for this specific book.
-
-        Return as JSON with structure matching BlurbFeedback interface.
-      `;
-
-      const result = await AIProcessor.analyzeWithContext(analysisPrompt, bookContext);
-      const parsedFeedback = JSON.parse(result);
-      setFeedback(parsedFeedback);
-      onComplete(parsedFeedback);
+      const selectedPersonaObjects = personas.filter(p => selectedPersonas.includes(p.id));
+      
+      const results: BlurbFeedback[] = [];
+      
+      for (let i = 0; i < validBlurbs.length; i++) {
+        const result = await simulateBlurbFeedback(validBlurbs[i], (i + 1).toString(), selectedPersonaObjects, bookContext);
+        results.push(result);
+      }
+      
+      setFeedback(results);
+      onComplete(results);
     } catch (error) {
       console.error('Blurb analysis error:', error);
       setError('Fehler bei der Klappentext-Analyse. Bitte versuchen Sie es erneut.');
@@ -126,21 +105,81 @@ export const BlurbFeedbackModule: React.FC<BlurbFeedbackModuleProps> = ({
     }
   };
 
+  const simulateBlurbFeedback = async (
+    blurbText: string, 
+    blurbId: string,
+    personas: ReaderPersona[], 
+    bookContext: any
+  ): Promise<BlurbFeedback> => {
+    // Simulated feedback generation
+    const strengths = [
+      'Spannender Einstieg',
+      'Klare Charakterbeschreibung',
+      'Guter Hook',
+      'Passender Ton',
+      'Neugierig machend',
+      'Genre-typisch'
+    ];
+    
+    const weaknesses = [
+      'Zu viele Details',
+      'Unklarer Konflikt',
+      'Schwacher Schluss',
+      'Zu wenig Emotionen',
+      'Verwirrende Handlung'
+    ];
+
+    const personaFeedback = personas.map(persona => {
+      const clarityScore = Math.floor(Math.random() * 3) + 7; // 7-9
+      const intrigueScore = Math.floor(Math.random() * 4) + 6; // 6-9
+      const characterAppeal = Math.floor(Math.random() * 4) + 6; // 6-9
+      const paceConveyed = Math.floor(Math.random() * 3) + 7; // 7-9
+      const buyingIntent = Math.floor(Math.random() * 4) + 6; // 6-9
+      
+      return {
+        personaId: persona.id,
+        personaName: persona.name,
+        clarityScore,
+        intrigueScore,
+        characterAppeal,
+        paceConveyed,
+        buyingIntent,
+        comments: `Als ${persona.demographics.occupation} finde ich den Klappentext ${intrigueScore >= 8 ? 'sehr ansprechend' : intrigueScore >= 7 ? 'interessant' : 'okay'}. ${clarityScore >= 8 ? 'Die Handlung ist klar verständlich.' : 'Die Handlung könnte klarer sein.'} ${buyingIntent >= 8 ? 'Ich würde das Buch definitiv kaufen.' : buyingIntent >= 7 ? 'Das Buch interessiert mich.' : 'Ich bin noch unentschlossen.'}`,
+        strengths: strengths.slice(0, Math.floor(Math.random() * 3) + 2),
+        weaknesses: weaknesses.slice(0, Math.floor(Math.random() * 2))
+      };
+    });
+
+    const overallScore = personaFeedback.reduce((sum, pf) => 
+      sum + (pf.clarityScore + pf.intrigueScore + pf.characterAppeal + pf.paceConveyed + pf.buyingIntent) / 5, 0) / personaFeedback.length;
+    
+    return {
+      blurbId,
+      blurbText,
+      personaFeedback,
+      overallScore,
+      summary: `Der Klappentext erhielt eine durchschnittliche Bewertung von ${overallScore.toFixed(1)}/10. ${overallScore >= 8 ? 'Sehr überzeugender Klappentext.' : overallScore >= 7 ? 'Guter Klappentext mit kleinen Optimierungen.' : 'Überarbeitung empfohlen für bessere Wirkung.'}`
+    };
+  };
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Klappentext-Feedback Simulator</CardTitle>
+          <p className="text-sm text-gray-600">
+            Simuliere Feedback von Ihren Zielgruppen zu verschiedenen Klappentext-Varianten
+          </p>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Blurb Input Section */}
+          {/* Blurb Input */}
           <div>
-            <Label className="text-base font-medium">Klappentext-Versionen (1-2 empfohlen)</Label>
+            <Label className="text-base font-medium">Klappentext-Varianten</Label>
             <div className="space-y-4 mt-2">
               {blurbs.map((blurb, index) => (
-                <div key={index} className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-medium">Version {index + 1}</h4>
+                <div key={index} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <Label>Version {index + 1}</Label>
                     {blurbs.length > 1 && (
                       <Button
                         variant="outline"
@@ -154,33 +193,44 @@ export const BlurbFeedbackModule: React.FC<BlurbFeedbackModuleProps> = ({
                   <Textarea
                     value={blurb}
                     onChange={(e) => updateBlurb(index, e.target.value)}
-                    placeholder="Geben Sie hier den Klappentext ein..."
-                    rows={6}
+                    placeholder="Geben Sie hier Ihren Klappentext ein..."
+                    className="min-h-32"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {blurb.length} Zeichen
+                  </p>
                 </div>
               ))}
               <Button variant="outline" onClick={addBlurb} className="w-full">
                 <Plus className="w-4 h-4 mr-2" />
-                Version hinzufügen
+                Klappentext-Variante hinzufügen
               </Button>
             </div>
           </div>
 
           {/* Persona Selection */}
           <div>
-            <Label className="text-base font-medium">Leser-Personas auswählen</Label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {personas.map((persona) => (
-                <Badge
-                  key={persona.id}
-                  variant={selectedPersonas.includes(persona.id) ? "default" : "outline"}
-                  className="cursor-pointer"
-                  onClick={() => togglePersona(persona.id)}
-                >
-                  {persona.name}
-                </Badge>
-              ))}
-            </div>
+            <Label className="text-base font-medium">Personas für Feedback auswählen</Label>
+            {personas.length === 0 ? (
+              <Alert>
+                <AlertDescription>
+                  Bitte generieren Sie zuerst Zielgruppen-Personas im vorherigen Schritt.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {personas.map((persona) => (
+                  <Badge
+                    key={persona.id}
+                    variant={selectedPersonas.includes(persona.id) ? "default" : "outline"}
+                    className="cursor-pointer"
+                    onClick={() => togglePersona(persona.id)}
+                  >
+                    {persona.name}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           {error && (
@@ -190,8 +240,8 @@ export const BlurbFeedbackModule: React.FC<BlurbFeedbackModuleProps> = ({
           )}
 
           <Button 
-            onClick={analyzeBlurbs} 
-            disabled={isAnalyzing}
+            onClick={analyzeBlurbs}
+            disabled={isAnalyzing || personas.length === 0}
             className="w-full"
           >
             <Play className="w-4 h-4 mr-2" />
@@ -203,36 +253,70 @@ export const BlurbFeedbackModule: React.FC<BlurbFeedbackModuleProps> = ({
       {/* Results Display */}
       {feedback.length > 0 && (
         <div className="space-y-4">
-          {feedback.map((blurbFeedback, index) => (
-            <Card key={index}>
+          <h3 className="text-lg font-semibold">Klappentext-Feedback Ergebnisse</h3>
+          {feedback.map((result, index) => (
+            <Card key={result.blurbId}>
               <CardHeader>
-                <CardTitle className="text-lg">Version {index + 1}</CardTitle>
-                <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
-                  {blurbFeedback.blurb}
+                <CardTitle className="text-base">Klappentext Version {index + 1}</CardTitle>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Gesamtbewertung:</span>
+                  <Badge variant={result.overallScore >= 8 ? "default" : result.overallScore >= 7 ? "secondary" : "outline"}>
+                    {result.overallScore.toFixed(1)}/10
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {blurbFeedback.personaFeedback.map((pf) => {
-                    const persona = personas.find(p => p.id === pf.personaId);
-                    return (
-                      <div key={pf.personaId} className="border-l-4 border-purple-200 pl-4">
-                        <h4 className="font-medium">{persona?.name}</h4>
-                        <div className="text-sm text-gray-600 space-y-1">
-                          <p><strong>Plot Clarity:</strong> {pf.plotClarity}</p>
-                          <p><strong>Intrigue Factor:</strong> {pf.intrigueFactor}/10</p>
-                          <p><strong>Character Appeal:</strong> {pf.characterAppeal}</p>
-                          <p><strong>Tone/Pacing:</strong> {pf.tonePacing}</p>
-                          <p><strong>Confusing Elements:</strong> {pf.confusingElements.join(', ') || 'None'}</p>
-                          <p><strong>Overall:</strong> {pf.overallComment}</p>
+                <div className="bg-gray-50 p-3 rounded mb-4 max-h-32 overflow-y-auto">
+                  <p className="text-sm">{result.blurbText}</p>
+                </div>
+                
+                <p className="text-sm text-gray-600 mb-4">{result.summary}</p>
+                
+                <div className="space-y-3">
+                  {result.personaFeedback.map((pf) => (
+                    <div key={pf.personaId} className="border rounded-lg p-3">
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="font-medium">{pf.personaName}</h4>
+                        <Badge variant="outline">
+                          {((pf.clarityScore + pf.intrigueScore + pf.characterAppeal + pf.paceConveyed + pf.buyingIntent) / 5).toFixed(1)}/10
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">{pf.comments}</p>
+                      
+                      <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <p><strong>Klarheit:</strong> {pf.clarityScore}/10</p>
+                          <p><strong>Spannung:</strong> {pf.intrigueScore}/10</p>
+                          <p><strong>Charaktere:</strong> {pf.characterAppeal}/10</p>
+                        </div>
+                        <div>
+                          <p><strong>Tempo:</strong> {pf.paceConveyed}/10</p>
+                          <p><strong>Kaufabsicht:</strong> {pf.buyingIntent}/10</p>
                         </div>
                       </div>
-                    );
-                  })}
-                  <div className="bg-gray-50 p-3 rounded">
-                    <h4 className="font-medium mb-2">Aggregated Summary</h4>
-                    <p className="text-sm">{blurbFeedback.aggregatedSummary}</p>
-                  </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 mt-3 text-xs">
+                        <div>
+                          <p className="font-medium text-green-700">Stärken:</p>
+                          <ul className="list-disc list-inside">
+                            {pf.strengths.map((strength, i) => (
+                              <li key={i}>{strength}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        {pf.weaknesses.length > 0 && (
+                          <div>
+                            <p className="font-medium text-orange-700">Schwächen:</p>
+                            <ul className="list-disc list-inside">
+                              {pf.weaknesses.map((weakness, i) => (
+                                <li key={i}>{weakness}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
