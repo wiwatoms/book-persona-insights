@@ -1,4 +1,8 @@
-import { getDocument } from 'react-pdf';
+
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Set up the worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 export interface FileProcessingResult {
   content: string;
@@ -49,7 +53,7 @@ export class FileProcessor {
   private static async processPDF(file: File): Promise<{ text: string; numPages: number }> {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await getDocument({ data: arrayBuffer }).promise;
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const numPages = pdf.numPages;
       let fullText = '';
 

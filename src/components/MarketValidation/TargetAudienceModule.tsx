@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -103,7 +104,7 @@ export const TargetAudienceModule: React.FC<TargetAudienceModuleProps> = ({
             <Card key={persona.id}>
               <CardHeader>
                 <CardTitle className="text-base">{persona.name}</CardTitle>
-                <p className="text-sm text-gray-600">{persona.description}</p>
+                <p className="text-sm text-gray-600">{persona.summary}</p>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
