@@ -73,6 +73,13 @@ export const BookAnalyzer = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [advancedMode, setAdvancedMode] = useState(false);
 
+  // Mock analysis steps for AnalysisProgress component
+  const mockAnalysisSteps = [
+    { id: 'chunk', name: 'Text aufteilen', status: 'completed' as const, progress: 100 },
+    { id: 'analyze', name: 'Analyse durchführen', status: 'running' as const, progress: 45 },
+    { id: 'compile', name: 'Ergebnisse zusammenfassen', status: 'pending' as const, progress: 0 }
+  ];
+
   const handlePdfUploaded = (content: string) => {
     setPdfContent(content);
     setActiveTab('archetypes');
@@ -187,11 +194,10 @@ export const BookAnalyzer = () => {
             </CardHeader>
             <CardContent>
               <AnalysisProgress 
-                pdfContent={pdfContent}
-                archetypes={archetypes}
-                onAnalysisComplete={handleAnalysisComplete}
-                isAnalyzing={isAnalyzing}
-                setIsAnalyzing={setIsAnalyzing}
+                steps={mockAnalysisSteps}
+                currentStep={1}
+                totalSteps={3}
+                isBackgroundJob={false}
               />
             </CardContent>
           </Card>
@@ -199,11 +205,15 @@ export const BookAnalyzer = () => {
 
         <TabsContent value="results" className="space-y-6">
           <ResultsDashboard 
-            results={analysisResults}
-            streamOfThoughtResults={streamOfThoughtResults}
-            analyticalInsights={analyticalInsights}
-            archetypes={archetypes}
-            textLength={pdfContent.length}
+            results={{ analysis: analysisResults.map(result => ({
+              name: `Archetype ${result.archetypeId}`,
+              Gesamtwertung: result.overallRating,
+              Engagement: result.ratings.engagement,
+              Stil: result.ratings.style,
+              Klarheit: result.ratings.clarity,
+              Tempo: result.ratings.pacing,
+              Relevanz: result.ratings.relevance
+            })) }}
           />
         </TabsContent>
 

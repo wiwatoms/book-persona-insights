@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useMobile } from '@/hooks/use-mobile';
 
 interface MobileResponsiveBarChartProps {
   data: any[];
@@ -23,7 +22,7 @@ export const MobileResponsiveBarChart: React.FC<MobileResponsiveBarChartProps> =
   categories = [],
   colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1']
 }) => {
-  const isMobile = useIsMobile();
+  const isMobile = useMobile();
   
   // Mobile optimizations
   const displayData = isMobile && data.length > 10 ? data.slice(0, 8) : data;
@@ -84,7 +83,7 @@ export const MobileResponsiveLineChart: React.FC<MobileResponsiveLineChartProps>
   categories = [],
   colors = ['#8884d8', '#82ca9d', '#ffc658']
 }) => {
-  const isMobile = useIsMobile();
+  const isMobile = useMobile();
   
   // Reduce data points if on mobile and too many points
   const displayData = isMobile && data.length > 12 ? 
@@ -139,7 +138,7 @@ export const MobileResponsivePieChart: React.FC<MobileResponsivePieChartProps> =
   className,
   colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1']
 }) => {
-  const isMobile = useIsMobile();
+  const isMobile = useMobile();
   
   // For mobile, reduce the number of slices by grouping smaller values
   let displayData = data;
@@ -201,7 +200,7 @@ export const MobileResponsiveAreaChart: React.FC<MobileResponsiveAreaChartProps>
   categories = [],
   colors = ['#8884d8', '#82ca9d', '#ffc658']
 }) => {
-  const isMobile = useIsMobile();
+  const isMobile = useMobile();
   
   // Reduce data points for mobile
   const displayData = isMobile && data.length > 12 ? 
