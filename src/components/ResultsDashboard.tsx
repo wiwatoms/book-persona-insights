@@ -1,400 +1,781 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ReaderArchetype, AnalysisResult } from './BookAnalyzer';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from 'recharts';
-import { TrendingUp, TrendingDown, Star, ShoppingCart, MessageSquare, Users, Download, FileText } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ArchetypeManager } from './ArchetypeManager';
+import { Button } from '@/components/ui/button';
+import { InfoIcon, BookOpen, Users, BarChart2, BookMarked, Layers, MessageSquare, Lightbulb } from 'lucide-react';
+import { ReaderArchetype, AnalysisResult, StreamOfThoughtResult, AnalyticalInsight } from './BookAnalyzer';
+import { MobileChartWrapper, MobileOptimizedText, MobilePaginatedContent } from './MobileOptimizedUI';
+import { MobileResponsiveBarChart, MobileResponsiveLineChart, MobileResponsivePieChart } from './MobileResponsiveCharts';
+import { isMobile } from '@/hooks/use-mobile';
 
 interface ResultsDashboardProps {
   results: AnalysisResult[];
+  streamOfThoughtResults?: StreamOfThoughtResult[];
+  analyticalInsights?: AnalyticalInsight[];
   archetypes: ReaderArchetype[];
   textLength: number;
 }
 
 export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
   results,
+  streamOfThoughtResults = [],
+  analyticalInsights = [],
   archetypes,
   textLength
 }) => {
-  const [selectedArchetype, setSelectedArchetype] = useState<string>('all');
+  const [selectedArchetypeId, setSelectedArchetypeId] = useState<string | null>(
+    archetypes.length > 0 ? archetypes[0].id : null
+  );
+  const [selectedTab, setSelectedTab] = useState('general');
+  const mobile = isMobile();
 
-  // Calculate aggregate metrics with updated 1-10 scale
-  const getAggregateMetrics = () => {
-    const archetypeMetrics = archetypes.map(archetype => {
-      const archetypeResults = results.filter(r => r.archetypeId === archetype.id);
-      const lastResult = archetypeResults[archetypeResults.length - 1];
-      
-      const avgOverall = archetypeResults.reduce((sum, r) => sum + r.overallRating, 0) / archetypeResults.length;
-      const avgBuying = archetypeResults.reduce((sum, r) => sum + r.buyingProbability, 0) / archetypeResults.length;
-      const avgRecommendation = archetypeResults.reduce((sum, r) => sum + r.recommendationLikelihood, 0) / archetypeResults.length;
-      
-      const positiveReviews = archetypeResults.filter(r => r.expectedReviewSentiment === 'positive').length;
-      const neutralReviews = archetypeResults.filter(r => r.expectedReviewSentiment === 'neutral').length;
-      const negativeReviews = archetypeResults.filter(r => r.expectedReviewSentiment === 'negative').length;
+  const filteredResults = useMemo(
+    () => selectedArchetypeId ? results.filter(result => result.archetypeId === selectedArchetypeId) : results,
+    [results, selectedArchetypeId]
+  );
 
-      return {
-        archetype,
-        avgOverall: Math.round(avgOverall * 10) / 10,
-        avgBuying: Math.round(avgBuying * 100),
-        avgRecommendation: Math.round(avgRecommendation * 100),
-        finalRating: lastResult?.overallRating || 0,
-        finalBuying: Math.round((lastResult?.buyingProbability || 0) * 100),
-        finalRecommendation: Math.round((lastResult?.recommendationLikelihood || 0) * 100),
-        reviewSentiment: lastResult?.expectedReviewSentiment || 'neutral',
-        positiveReviews,
-        neutralReviews,
-        negativeReviews,
-        totalChunks: archetypeResults.length
-      };
+  const selectedArchetype = useMemo(
+    () => archetypes.find(arch => arch.id === selectedArchetypeId),
+    [archetypes, selectedArchetypeId]
+  );
+
+  const hasLayeredAnalysis = streamOfThoughtResults.length > 0 && analyticalInsights.length > 0;
+
+  // Aggregate ratings by archetype
+  const aggregateByArchetype = useMemo(() => {
+    const aggregates: { 
+      archetypeId: string; 
+      name: string;
+      overallRating: number;
+      engagement: number;
+      style: number;
+      clarity: number;
+      pacing: number;
+      relevance: number;
+      buyingProbability: number;
+      count: number;
+    }[] = [];
+
+    archetypes.forEach(archetype => {
+      const archetypeResults = results.filter(result => result.archetypeId === archetype.id);
+      if (archetypeResults.length === 0) return;
+
+      const overallSum = archetypeResults.reduce((sum, result) => sum + result.overallRating, 0);
+      const engagementSum = archetypeResults.reduce((sum, result) => sum + result.ratings.engagement, 0);
+      const styleSum = archetypeResults.reduce((sum, result) => sum + result.ratings.style, 0);
+      const claritySum = archetypeResults.reduce((sum, result) => sum + result.ratings.clarity, 0);
+      const pacingSum = archetypeResults.reduce((sum, result) => sum + result.ratings.pacing, 0);
+      const relevanceSum = archetypeResults.reduce((sum, result) => sum + result.ratings.relevance, 0);
+      const buyingSum = archetypeResults.reduce((sum, result) => sum + result.buyingProbability, 0);
+
+      aggregates.push({
+        archetypeId: archetype.id,
+        name: archetype.name,
+        overallRating: parseFloat((overallSum / archetypeResults.length).toFixed(1)),
+        engagement: parseFloat((engagementSum / archetypeResults.length).toFixed(1)),
+        style: parseFloat((styleSum / archetypeResults.length).toFixed(1)),
+        clarity: parseFloat((claritySum / archetypeResults.length).toFixed(1)),
+        pacing: parseFloat((pacingSum / archetypeResults.length).toFixed(1)),
+        relevance: parseFloat((relevanceSum / archetypeResults.length).toFixed(1)),
+        buyingProbability: parseFloat((buyingSum / archetypeResults.length).toFixed(2)),
+        count: archetypeResults.length
+      });
     });
 
-    return archetypeMetrics;
-  };
+    return aggregates;
+  }, [results, archetypes]);
 
-  const aggregateMetrics = getAggregateMetrics();
-  const overallAvgRating = aggregateMetrics.reduce((sum, m) => sum + m.finalRating, 0) / aggregateMetrics.length;
-  const overallBuyingProb = aggregateMetrics.reduce((sum, m) => sum + m.finalBuying, 0) / aggregateMetrics.length;
+  // Extract marketing insights
+  const marketingInsights = useMemo(() => {
+    const insights: { 
+      archetypeId: string;
+      archetypeName: string;
+      insight: string;
+      chunkIndex: number;
+    }[] = [];
 
-  // Data for charts - updated for 1-10 scale
-  const ratingProgressData = archetypes.map(archetype => {
-    const archetypeResults = results.filter(r => r.archetypeId === archetype.id);
-    return {
-      name: archetype.name,
-      data: archetypeResults.map((r, idx) => ({
-        chunk: idx + 1,
-        rating: r.overallRating,
-        buying: r.buyingProbability * 100,
-        recommendation: r.recommendationLikelihood * 100
-      }))
-    };
-  });
+    results.forEach(result => {
+      const archetype = archetypes.find(arch => arch.id === result.archetypeId);
+      if (!archetype) return;
 
-  const categoryComparisonData = archetypes.map(archetype => {
-    const archetypeResults = results.filter(r => r.archetypeId === archetype.id);
-    const lastResult = archetypeResults[archetypeResults.length - 1];
+      result.marketingInsights.forEach(insight => {
+        insights.push({
+          archetypeId: result.archetypeId,
+          archetypeName: archetype.name,
+          insight,
+          chunkIndex: result.chunkIndex
+        });
+      });
+    });
+
+    return insights;
+  }, [results, archetypes]);
+
+  // Get two-layer analysis results for current archetype
+  const twoLayerResults = useMemo(() => {
+    if (!selectedArchetypeId) return [];
     
-    if (!lastResult) return null;
-
-    return {
-      archetype: archetype.name.split(' ')[archetype.name.split(' ').length - 1], // Last word for shorter labels
-      engagement: lastResult.ratings.engagement,
-      style: lastResult.ratings.style,
-      clarity: lastResult.ratings.clarity,
-      pacing: lastResult.ratings.pacing,
-      relevance: lastResult.ratings.relevance,
-      overall: lastResult.overallRating
-    };
-  }).filter(Boolean);
-
-  const marketingInsightsData = () => {
-    const allInsights: string[] = [];
-    results.forEach(r => allInsights.push(...r.marketingInsights));
+    // Combine stream-of-thought results with analytical insights
+    const combined = [];
     
-    const insightCounts = allInsights.reduce((acc, insight) => {
-      acc[insight] = (acc[insight] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    for (const streamResult of streamOfThoughtResults.filter(r => r.archetypeId === selectedArchetypeId)) {
+      const matchingInsight = analyticalInsights.find(
+        i => i.archetypeId === selectedArchetypeId && i.chunkIndex === streamResult.chunkIndex
+      );
+      
+      if (matchingInsight) {
+        combined.push({
+          chunkIndex: streamResult.chunkIndex,
+          streamOfThought: streamResult,
+          analyticalInsight: matchingInsight
+        });
+      }
+    }
+    
+    return combined;
+  }, [selectedArchetypeId, streamOfThoughtResults, analyticalInsights]);
 
-    return Object.entries(insightCounts)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 10)
-      .map(([insight, count]) => ({ insight, count }));
-  };
+  // Calculate sentiment distribution
+  const sentimentDistribution = useMemo(() => {
+    const distribution = { positive: 0, neutral: 0, negative: 0 };
+    
+    filteredResults.forEach(result => {
+      distribution[result.expectedReviewSentiment]++;
+    });
+    
+    return [
+      { name: 'Positiv', value: distribution.positive },
+      { name: 'Neutral', value: distribution.neutral },
+      { name: 'Negativ', value: distribution.negative }
+    ];
+  }, [filteredResults]);
+  
+  // Prepare data for rating charts
+  const ratingChartData = useMemo(() => {
+    return aggregateByArchetype.map(data => ({
+      name: data.name,
+      Gesamtwertung: data.overallRating,
+      Engagement: data.engagement,
+      Stil: data.style,
+      Klarheit: data.clarity,
+      Tempo: data.pacing,
+      Relevanz: data.relevance
+    }));
+  }, [aggregateByArchetype]);
 
-  const exportReport = () => {
-    const reportData = {
-      summary: {
-        totalArchetypes: archetypes.length,
-        totalAnalyzedChunks: results.length,
-        textLength,
-        overallRating: Math.round(overallAvgRating * 10) / 10,
-        overallBuyingProbability: Math.round(overallBuyingProb),
-        ratingScale: "1-10 (updated scale)"
-      },
-      archetypeResults: aggregateMetrics,
-      detailedResults: results
-    };
-
-    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'buchanalyse-report.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  // Prepare data for buying probability chart
+  const buyingProbChartData = useMemo(() => {
+    return aggregateByArchetype.map(data => ({
+      name: data.name,
+      'Kauf-Wahrscheinlichkeit': Math.round(data.buyingProbability * 100)
+    }));
+  }, [aggregateByArchetype]);
 
   return (
-    <div className="space-y-6">
-      {/* Summary Cards - updated for 1-10 scale */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-600 font-medium">Gesamtbewertung</p>
-                <p className="text-3xl font-bold text-blue-800">
-                  {Math.round(overallAvgRating * 10) / 10}/10
-                </p>
-                <p className="text-xs text-blue-500">Neue 1-10 Skala</p>
-              </div>
-              <Star className="w-8 h-8 text-blue-600" />
+    <div className="space-y-8">
+      {/* Archetype Selector */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+            <div className="flex-1">
+              <div className="mb-2 text-sm font-medium">Zielgruppe auswählen:</div>
+              <Select
+                value={selectedArchetypeId || ''}
+                onValueChange={setSelectedArchetypeId}
+              >
+                <SelectTrigger className="w-full md:w-[300px]">
+                  <SelectValue placeholder="Alle Archetypen" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Alle Archetypen</SelectItem>
+                  {archetypes.map((archetype) => (
+                    <SelectItem key={archetype.id} value={archetype.id}>
+                      {archetype.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-r from-green-50 to-green-100 border-green-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-600 font-medium">Kaufwahrscheinlichkeit</p>
-                <p className="text-3xl font-bold text-green-800">
-                  {Math.round(overallBuyingProb)}%
-                </p>
+            
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-slate-600">
+                <span className="font-medium text-slate-800">{results.length}</span> Bewertungen 
+                <span className="ml-2 font-medium text-slate-800">{archetypes.length}</span> Archetypen
               </div>
-              <ShoppingCart className="w-8 h-8 text-green-600" />
+              
+              {selectedArchetype && (
+                <Badge variant="outline" className="bg-blue-50 text-blue-800">
+                  {selectedArchetype.name}
+                </Badge>
+              )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="general" value={selectedTab} onValueChange={setSelectedTab}>
+        <TabsList className="mb-4 grid w-full grid-cols-2 md:grid-cols-4">
+          <TabsTrigger value="general" className="flex items-center gap-2">
+            <BarChart2 className="w-4 h-4" />
+            <span className="hidden sm:inline">Übersicht</span>
+            <span className="sm:hidden">Übersicht</span>
+          </TabsTrigger>
+          <TabsTrigger value="insights" className="flex items-center gap-2">
+            <Lightbulb className="w-4 h-4" />
+            <span className="hidden sm:inline">Marketing Insights</span>
+            <span className="sm:hidden">Insights</span>
+          </TabsTrigger>
+          {hasLayeredAnalysis && (
+            <TabsTrigger value="two-layer" className="flex items-center gap-2">
+              <Layers className="w-4 h-4" />
+              <span className="hidden sm:inline">Two-Layer Analyse</span>
+              <span className="sm:hidden">2-Layer</span>
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="raw-data" className="flex items-center gap-2">
+            <BookMarked className="w-4 h-4" />
+            <span className="hidden sm:inline">Detaildaten</span>
+            <span className="sm:hidden">Details</span>
+          </TabsTrigger>
+        </TabsList>
 
-        <Card className="bg-gradient-to-r from-purple-50 to-purple-100 border-purple-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-purple-600 font-medium">Positive Reviews</p>
-                <p className="text-3xl font-bold text-purple-800">
-                  {aggregateMetrics.filter(m => m.reviewSentiment === 'positive').length}
-                </p>
-              </div>
-              <MessageSquare className="w-8 h-8 text-purple-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-r from-orange-50 to-orange-100 border-orange-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-orange-600 font-medium">Analysierte Abschnitte</p>
-                <p className="text-3xl font-bold text-orange-800">
-                  {results.length}
-                </p>
-              </div>
-              <FileText className="w-8 h-8 text-orange-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Dashboard */}
-      <Tabs defaultValue="overview" className="space-y-6">
-        <div className="flex justify-between items-center">
-          <TabsList className="bg-white/70 backdrop-blur-sm border">
-            <TabsTrigger value="overview">Übersicht</TabsTrigger>
-            <TabsTrigger value="archetypes">Archetypen</TabsTrigger>
-            <TabsTrigger value="progress">Verlauf</TabsTrigger>
-            <TabsTrigger value="insights">Marketing-Insights</TabsTrigger>
-          </TabsList>
-          
-          <Button onClick={exportReport} variant="outline" className="gap-2">
-            <Download className="w-4 h-4" />
-            Report exportieren
-          </Button>
-        </div>
-
-        <TabsContent value="overview" className="space-y-6">
-          {/* Archetype Comparison Chart - updated for 1-10 scale */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Bewertung nach Kategorien (1-10 Skala)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <RadarChart data={categoryComparisonData}>
-                  <PolarGrid />
-                  <PolarAngleAxis dataKey="archetype" />
-                  <PolarRadiusAxis angle={90} domain={[0, 10]} />
-                  <Radar name="Engagement" dataKey="engagement" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.1} />
-                  <Radar name="Stil" dataKey="style" stroke="#10B981" fill="#10B981" fillOpacity={0.1} />
-                  <Radar name="Klarheit" dataKey="clarity" stroke="#F59E0B" fill="#F59E0B" fillOpacity={0.1} />
-                  <Radar name="Tempo" dataKey="pacing" stroke="#EF4444" fill="#EF4444" fillOpacity={0.1} />
-                  <Radar name="Relevanz" dataKey="relevance" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.1} />
-                  <Legend />
-                </RadarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Final Ratings Bar Chart - updated for 1-10 scale */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Finale Bewertungen der Archetypen (1-10 Skala)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={aggregateMetrics}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="archetype.name" 
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    interval={0}
-                  />
-                  <YAxis domain={[0, 10]} />
-                  <Tooltip 
-                    formatter={(value: number) => [value, 'Bewertung']}
-                    labelFormatter={(label) => `Archetyp: ${label}`}
-                  />
-                  <Bar dataKey="finalRating" fill="#3B82F6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="archetypes" className="space-y-6">
-          {/* Individual Archetype Cards - updated for 1-10 scale */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {aggregateMetrics.map((metric) => (
-              <Card key={metric.archetype.id} className="border-slate-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{metric.archetype.name}</span>
-                    <div className="flex gap-2">
-                      <Badge 
-                        variant={metric.reviewSentiment === 'positive' ? 'default' : 
-                               metric.reviewSentiment === 'neutral' ? 'secondary' : 'destructive'}
-                      >
-                        {metric.reviewSentiment === 'positive' ? 'Positiv' :
-                         metric.reviewSentiment === 'neutral' ? 'Neutral' : 'Negativ'}
-                      </Badge>
-                    </div>
-                  </CardTitle>
+        {/* General Overview Tab */}
+        <TabsContent value="general" className="space-y-6">
+          {/* Overall Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {aggregateByArchetype.slice(0, 4).map((data) => (
+              <Card key={data.archetypeId} className={`${
+                data.overallRating >= 8 ? 'bg-green-50' : 
+                data.overallRating >= 6 ? 'bg-blue-50' : 
+                data.overallRating >= 4 ? 'bg-yellow-50' : 'bg-red-50'
+              }`}>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-base font-medium">{data.name}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-3 bg-slate-50 rounded">
-                      <div className="text-2xl font-bold text-slate-800">{metric.finalRating}/10</div>
-                      <div className="text-sm text-slate-600">Finale Bewertung</div>
-                      <div className="text-xs text-slate-500">1-10 Skala</div>
-                    </div>
-                    <div className="text-center p-3 bg-slate-50 rounded">
-                      <div className="text-2xl font-bold text-slate-800">{metric.finalBuying}%</div>
-                      <div className="text-sm text-slate-600">Kaufwahrscheinlichkeit</div>
-                    </div>
+                <CardContent className="py-2">
+                  <div className="text-2xl font-bold mb-1">
+                    {data.overallRating}/10
                   </div>
-                  
-                  <div className="text-center p-3 bg-slate-50 rounded">
-                    <div className="text-xl font-bold text-slate-800">{metric.finalRecommendation}%</div>
-                    <div className="text-sm text-slate-600">Weiterempfehlung</div>
-                  </div>
-
-                  <div className="text-sm text-slate-600">
-                    <p><strong>Analysierte Abschnitte:</strong> {metric.totalChunks}</p>
-                    <p className="mt-2">{metric.archetype.description}</p>
+                  <div className="text-sm">
+                    Kaufwahrscheinlichkeit: {(data.buyingProbability * 100).toFixed(0)}%
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
+          
+          {/* Charts - Optimized for Mobile */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Overall Rating Chart */}
+            <MobileChartWrapper 
+              title="Gesamtbewertungen nach Archetyp" 
+              description="Durchschnittliche Bewertungen (1-10)"
+            >
+              <MobileResponsiveBarChart 
+                data={ratingChartData}
+                xAxisKey="name"
+                yAxisKey="Gesamtwertung"
+                colors={['blue']}
+                className="w-full"
+              />
+            </MobileChartWrapper>
+
+            {/* Buying Probability Chart */}
+            <MobileChartWrapper 
+              title="Kaufwahrscheinlichkeit (%)" 
+              description="Wahrscheinlichkeit eines Kaufs nach Leserarchetyp"
+            >
+              <MobileResponsiveBarChart 
+                data={buyingProbChartData}
+                xAxisKey="name"
+                yAxisKey="Kauf-Wahrscheinlichkeit"
+                colors={['green']}
+                className="w-full"
+              />
+            </MobileChartWrapper>
+            
+            {/* Sentiment Distribution Chart */}
+            <MobileChartWrapper 
+              title="Sentiment-Verteilung" 
+              description="Verteilung positiver, neutraler und negativer Bewertungen"
+            >
+              <MobileResponsivePieChart 
+                data={sentimentDistribution}
+                category="value"
+                colors={['green', 'blue', 'red']}
+                className="w-full"
+              />
+            </MobileChartWrapper>
+
+            {/* Radar Chart of All Ratings */}
+            <MobileChartWrapper 
+              title="Detailbewertungen" 
+              description="Vergleich der verschiedenen Bewertungskategorien"
+            >
+              <MobileResponsiveBarChart 
+                data={selectedArchetypeId ? 
+                  [ratingChartData.find(d => d.name === selectedArchetype?.name) || ratingChartData[0]] : 
+                  ratingChartData[0] ? [ratingChartData[0]] : []
+                }
+                xAxisKey={''}
+                categories={['Gesamtwertung', 'Engagement', 'Stil', 'Klarheit', 'Tempo', 'Relevanz']}
+                colors={['purple', 'blue', 'cyan', 'green', 'yellow', 'orange']}
+                className="w-full"
+              />
+            </MobileChartWrapper>
+          </div>
         </TabsContent>
 
-        <TabsContent value="progress" className="space-y-6">
-          {/* Progress Charts for each archetype - updated for 1-10 scale */}
-          {ratingProgressData.map((archetypeData) => (
-            <Card key={archetypeData.name}>
-              <CardHeader>
-                <CardTitle>Bewertungsverlauf: {archetypeData.name} (1-10 Skala)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={archetypeData.data}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="chunk" />
-                    <YAxis yAxisId="rating" orientation="left" domain={[0, 10]} />
-                    <YAxis yAxisId="percent" orientation="right" domain={[0, 100]} />
-                    <Tooltip />
-                    <Line 
-                      yAxisId="rating"
-                      type="monotone" 
-                      dataKey="rating" 
-                      stroke="#3B82F6" 
-                      strokeWidth={2}
-                      name="Bewertung (1-10)"
-                    />
-                    <Line 
-                      yAxisId="percent"
-                      type="monotone" 
-                      dataKey="buying" 
-                      stroke="#10B981" 
-                      strokeWidth={2}
-                      name="Kaufwahrscheinlichkeit (%)"
-                    />
-                    <Line 
-                      yAxisId="percent"
-                      type="monotone" 
-                      dataKey="recommendation" 
-                      stroke="#F59E0B" 
-                      strokeWidth={2}
-                      name="Weiterempfehlung (%)"
-                    />
-                    <Legend />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          ))}
-        </TabsContent>
-
+        {/* Marketing Insights Tab */}
         <TabsContent value="insights" className="space-y-6">
-          {/* Marketing Insights */}
           <Card>
             <CardHeader>
-              <CardTitle>Top Marketing-Insights</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Lightbulb className="w-5 h-5" />
+                Marketing Insights
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {marketingInsightsData().map((insight, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 rounded">
-                    <span className="text-slate-800">{insight.insight}</span>
-                    <Badge variant="outline">{insight.count}x erwähnt</Badge>
-                  </div>
-                ))}
-              </div>
+              {mobile ? (
+                <MobilePaginatedContent
+                  items={marketingInsights.filter(insight => 
+                    !selectedArchetypeId || insight.archetypeId === selectedArchetypeId
+                  )}
+                  itemsPerPage={5}
+                  title="Top Marketing-Insights"
+                  renderItem={(item, index) => (
+                    <div key={index} className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <Badge variant="outline" className="bg-blue-50 text-blue-800">
+                          {item.archetypeName}
+                        </Badge>
+                        <span className="text-xs text-slate-500">Abschnitt {item.chunkIndex + 1}</span>
+                      </div>
+                      <p className="text-sm">{item.insight}</p>
+                    </div>
+                  )}
+                />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {marketingInsights
+                    .filter(insight => !selectedArchetypeId || insight.archetypeId === selectedArchetypeId)
+                    .slice(0, 12)
+                    .map((item, index) => (
+                      <div key={index} className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <Badge variant="outline" className="bg-blue-50 text-blue-800">
+                            {item.archetypeName}
+                          </Badge>
+                          <span className="text-xs text-slate-500">Abschnitt {item.chunkIndex + 1}</span>
+                        </div>
+                        <p className="text-sm">{item.insight}</p>
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
+
+              {marketingInsights.length === 0 && (
+                <Alert>
+                  <InfoIcon className="h-4 w-4" />
+                  <AlertDescription>
+                    Keine Marketing Insights verfügbar.
+                  </AlertDescription>
+                </Alert>
+              )}
             </CardContent>
           </Card>
 
-          {/* Recommendations by Archetype */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {aggregateMetrics.map((metric) => {
-              const archetypeResults = results.filter(r => r.archetypeId === metric.archetype.id);
-              const uniqueInsights = [...new Set(archetypeResults.flatMap(r => r.marketingInsights))];
-              
-              return (
-                <Card key={metric.archetype.id}>
-                  <CardHeader>
-                    <CardTitle className="text-lg">{metric.archetype.name}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <h4 className="font-medium text-sm text-slate-600">Marketing-Empfehlungen:</h4>
-                      <ul className="space-y-1">
-                        {uniqueInsights.slice(0, 4).map((insight, idx) => (
-                          <li key={idx} className="text-sm text-slate-700 flex items-start gap-2">
-                            <span className="text-blue-500 mt-1">•</span>
-                            {insight}
-                          </li>
-                        ))}
-                      </ul>
+          {analyticalInsights.length > 0 && selectedArchetypeId && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Lightbulb className="w-5 h-5" />
+                  Strukturierte Marketing-Empfehlungen
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {analyticalInsights
+                    .filter(insight => insight.archetypeId === selectedArchetypeId)
+                    .slice(0, 3)
+                    .map((insight, idx) => (
+                      <div key={idx} className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                        <h3 className="font-medium text-green-800 mb-3">Top Empfehlungen:</h3>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <h4 className="text-sm font-medium text-green-700 mb-1">Marketing-Chancen:</h4>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {insight.marketingOpportunities.map((opp, i) => (
+                                <li key={i} className="text-sm text-green-600">{opp}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          
+                          <div>
+                            <h4 className="text-sm font-medium text-green-700 mb-1">Empfohlene Maßnahmen:</h4>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {insight.recommendedActions.map((action, i) => (
+                                <li key={i} className="text-sm text-green-600">{action}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Two-Layer Analysis Tab */}
+        {hasLayeredAnalysis && (
+          <TabsContent value="two-layer" className="space-y-6">
+            {!selectedArchetypeId ? (
+              <Alert>
+                <InfoIcon className="h-4 w-4" />
+                <AlertDescription>
+                  Bitte wählen Sie einen Archetyp, um die Two-Layer-Analyse zu sehen.
+                </AlertDescription>
+              </Alert>
+            ) : twoLayerResults.length === 0 ? (
+              <Alert>
+                <InfoIcon className="h-4 w-4" />
+                <AlertDescription>
+                  Keine Two-Layer-Analyseergebnisse verfügbar für {selectedArchetype?.name}.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="space-y-6">
+                {/* Layer 1 and 2 Tabs For Each Section */}
+                {twoLayerResults.slice(0, 3).map((result, idx) => (
+                  <Card key={idx}>
+                    <CardHeader>
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                        <CardTitle className="text-lg">
+                          Textabschnitt {result.chunkIndex + 1}
+                        </CardTitle>
+                        <div className="flex gap-2">
+                          <Badge variant="outline" className="bg-purple-50 text-purple-800">
+                            <MessageSquare className="w-3 h-3 mr-1" />
+                            Stream of Thought
+                          </Badge>
+                          <Badge variant="outline" className="bg-green-50 text-green-800">
+                            <Lightbulb className="w-3 h-3 mr-1" />
+                            Analytische Insights
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent className="space-y-4">
+                      <Tabs defaultValue="layer1">
+                        <TabsList className="w-full grid grid-cols-2">
+                          <TabsTrigger value="layer1">
+                            <MessageSquare className="w-4 h-4 mr-2" />
+                            Gedankenstrom
+                          </TabsTrigger>
+                          <TabsTrigger value="layer2">
+                            <Lightbulb className="w-4 h-4 mr-2" />
+                            Analyseergebnisse
+                          </TabsTrigger>
+                        </TabsList>
+                        
+                        <TabsContent value="layer1" className="space-y-4 pt-4">
+                          <MobileOptimizedText 
+                            title="Ungefilterte Gedanken" 
+                            content={result.streamOfThought.rawThoughts}
+                            variant="feedback"
+                          />
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <h4 className="font-medium text-sm">Emotionale Reaktionen:</h4>
+                              <div className="flex flex-wrap gap-2">
+                                {result.streamOfThought.emotionalReactions.map((emotion, i) => (
+                                  <Badge key={i} className="bg-purple-100 text-purple-800">{emotion}</Badge>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <h4 className="font-medium text-sm mb-2">Direkte Zitate:</h4>
+                              <div className="space-y-1">
+                                {result.streamOfThought.immediateQuotes.map((quote, i) => (
+                                  <p key={i} className="text-sm italic bg-purple-50 p-2 rounded">"{quote}"</p>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="font-medium text-sm mb-2">Fragmentierte Insights:</h4>
+                              <ul className="list-disc pl-5 space-y-1">
+                                {result.streamOfThought.fragmentedInsights.map((insight, i) => (
+                                  <li key={i} className="text-sm">{insight}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            
+                            <div>
+                              <h4 className="font-medium text-sm mb-2">Messwerte:</h4>
+                              <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                  <span>Stimmung:</span>
+                                  <span className="font-medium">{result.streamOfThought.mood}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Aufmerksamkeitslevel:</span>
+                                  <span className="font-medium">{result.streamOfThought.attentionLevel}/10</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Persönliche Resonanz:</span>
+                                  <span className="font-medium">{result.streamOfThought.personalResonance}/10</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="layer2" className="space-y-4 pt-4">
+                          <MobileOptimizedText 
+                            title="Strukturiertes Feedback" 
+                            content={result.analyticalInsight.structuredFeedback}
+                            variant="insight"
+                          />
+                          
+                          <div>
+                            <h4 className="font-medium text-sm mb-2">Key Takeaways:</h4>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {result.analyticalInsight.keyTakeaways.map((takeaway, i) => (
+                                <li key={i} className="text-sm">{takeaway}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="font-medium text-sm mb-2">Marketing-Chancen:</h4>
+                              <ul className="list-disc pl-5 space-y-1">
+                                {result.analyticalInsight.marketingOpportunities.map((opp, i) => (
+                                  <li key={i} className="text-sm">{opp}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            
+                            <div>
+                              <h4 className="font-medium text-sm mb-2">Wettbewerbsvorteile:</h4>
+                              <ul className="list-disc pl-5 space-y-1">
+                                {result.analyticalInsight.competitiveAdvantages.map((adv, i) => (
+                                  <li key={i} className="text-sm">{adv}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="font-medium text-sm mb-2">Risikofaktoren:</h4>
+                              <ul className="list-disc pl-5 space-y-1">
+                                {result.analyticalInsight.riskFactors.map((risk, i) => (
+                                  <li key={i} className="text-sm text-red-600">{risk}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            
+                            <div>
+                              <h4 className="font-medium text-sm mb-2">Handlungsempfehlungen:</h4>
+                              <ul className="list-disc pl-5 space-y-1">
+                                {result.analyticalInsight.recommendedActions.map((action, i) => (
+                                  <li key={i} className="text-sm text-green-600">{action}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-end">
+                            <Badge variant="outline">
+                              Konfidenz: {result.analyticalInsight.confidenceScore}/10
+                            </Badge>
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                    </CardContent>
+                  </Card>
+                ))}
+                
+                {twoLayerResults.length > 3 && (
+                  <div className="flex justify-center">
+                    <Button variant="outline">
+                      Weitere Abschnitte anzeigen ({twoLayerResults.length - 3})
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
+        )}
+
+        {/* Raw Data Tab */}
+        <TabsContent value="raw-data" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5" />
+                Detaillierte Bewertungen
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {mobile ? (
+                <MobilePaginatedContent
+                  items={filteredResults}
+                  itemsPerPage={3}
+                  title="Detaillierte Bewertungen"
+                  renderItem={(result, index) => {
+                    const archetype = archetypes.find(a => a.id === result.archetypeId);
+                    return (
+                      <div key={index} className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <Badge variant="outline" className="bg-blue-50 text-blue-800">
+                            {archetype?.name || 'Unbekannt'}
+                          </Badge>
+                          <div className="flex items-center">
+                            <div className={`px-2 py-1 rounded text-sm font-medium ${
+                              result.overallRating >= 8 ? 'bg-green-100 text-green-800' : 
+                              result.overallRating >= 6 ? 'bg-blue-100 text-blue-800' : 
+                              result.overallRating >= 4 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {result.overallRating}/10
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <MobileOptimizedText
+                          title="Feedback"
+                          content={result.feedback}
+                          maxPreviewLength={100}
+                        />
+                        
+                        <div>
+                          <h4 className="text-sm font-medium mb-2">Bewertungen:</h4>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span>Engagement:</span>
+                              <span className="font-medium">{result.ratings.engagement}/10</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Stil:</span>
+                              <span className="font-medium">{result.ratings.style}/10</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Klarheit:</span>
+                              <span className="font-medium">{result.ratings.clarity}/10</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Tempo:</span>
+                              <span className="font-medium">{result.ratings.pacing}/10</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Relevanz:</span>
+                              <span className="font-medium">{result.ratings.relevance}/10</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Kaufwahrscheinlichkeit:</span>
+                              <span className="font-medium">{(result.buyingProbability * 100).toFixed(0)}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+              ) : (
+                <div className="space-y-4">
+                  {filteredResults.slice(0, 6).map((result, index) => {
+                    const archetype = archetypes.find(a => a.id === result.archetypeId);
+                    return (
+                      <div key={index} className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                        <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                          <div>
+                            <Badge variant="outline" className="bg-blue-50 text-blue-800">
+                              {archetype?.name || 'Unbekannt'}
+                            </Badge>
+                            <span className="ml-2 text-sm text-slate-500">Abschnitt {result.chunkIndex + 1}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="text-sm">
+                              Sentiment: {result.expectedReviewSentiment}
+                            </div>
+                            <div className={`px-2 py-1 rounded text-sm font-medium ${
+                              result.overallRating >= 8 ? 'bg-green-100 text-green-800' : 
+                              result.overallRating >= 6 ? 'bg-blue-100 text-blue-800' : 
+                              result.overallRating >= 4 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {result.overallRating}/10
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="md:col-span-2">
+                            <h4 className="text-sm font-medium mb-2">Feedback:</h4>
+                            <p className="text-sm">{result.feedback}</p>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium mb-2">Ratings:</h4>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span>Engagement:</span>
+                                <span className="font-medium">{result.ratings.engagement}/10</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Stil:</span>
+                                <span className="font-medium">{result.ratings.style}/10</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Klarheit:</span>
+                                <span className="font-medium">{result.ratings.clarity}/10</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Tempo:</span>
+                                <span className="font-medium">{result.ratings.pacing}/10</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Relevanz:</span>
+                                <span className="font-medium">{result.ratings.relevance}/10</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Kauf:</span>
+                                <span className="font-medium">{(result.buyingProbability * 100).toFixed(0)}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  {filteredResults.length > 6 && (
+                    <div className="flex justify-center">
+                      <Button variant="outline">
+                        Mehr Bewertungen anzeigen ({filteredResults.length - 6})
+                      </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

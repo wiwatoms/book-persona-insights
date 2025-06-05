@@ -6,7 +6,9 @@ import { PdfUploader } from './PdfUploader';
 import { ArchetypeManager } from './ArchetypeManager';
 import { AnalysisProgress } from './AnalysisProgress';
 import { ResultsDashboard } from './ResultsDashboard';
-import { FileText, Users, TrendingUp, BarChart3 } from 'lucide-react';
+import { AdvancedArchetypeManager } from './AdvancedArchetypeManager'; 
+import { AdvancedPromptEditor } from './AdvancedPromptEditor';
+import { FileText, Users, TrendingUp, BarChart3, Settings } from 'lucide-react';
 
 export interface ReaderArchetype {
   id: string;
@@ -37,12 +39,39 @@ export interface AnalysisResult {
   marketingInsights: string[];
 }
 
+export interface StreamOfThoughtResult {
+  archetypeId: string;
+  chunkIndex: number;
+  rawThoughts: string;
+  emotionalReactions: string[];
+  immediateQuotes: string[];
+  fragmentedInsights: string[];
+  mood: 'excited' | 'bored' | 'confused' | 'engaged' | 'frustrated' | 'curious';
+  attentionLevel: number; // 1-10
+  personalResonance: number; // 1-10
+}
+
+export interface AnalyticalInsight {
+  archetypeId: string;
+  chunkIndex: number;
+  keyTakeaways: string[];
+  structuredFeedback: string;
+  marketingOpportunities: string[];
+  competitiveAdvantages: string[];
+  riskFactors: string[];
+  recommendedActions: string[];
+  confidenceScore: number; // 1-10
+}
+
 export const BookAnalyzer = () => {
   const [activeTab, setActiveTab] = useState('upload');
   const [pdfContent, setPdfContent] = useState<string>('');
   const [archetypes, setArchetypes] = useState<ReaderArchetype[]>([]);
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
+  const [streamOfThoughtResults, setStreamOfThoughtResults] = useState<StreamOfThoughtResult[]>([]);
+  const [analyticalInsights, setAnalyticalInsights] = useState<AnalyticalInsight[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [advancedMode, setAdvancedMode] = useState(false);
 
   const handlePdfUploaded = (content: string) => {
     setPdfContent(content);
@@ -59,16 +88,28 @@ export const BookAnalyzer = () => {
     setActiveTab('results');
   };
 
+  const handleLayeredAnalysisComplete = (
+    standardResults: AnalysisResult[], 
+    sotResults: StreamOfThoughtResult[], 
+    insights: AnalyticalInsight[]
+  ) => {
+    setAnalysisResults(standardResults);
+    setStreamOfThoughtResults(sotResults);
+    setAnalyticalInsights(insights);
+    setActiveTab('results');
+  };
+
   return (
     <div className="max-w-7xl mx-auto">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-        <TabsList className="grid w-full grid-cols-4 bg-white/70 backdrop-blur-sm border border-slate-200">
+        <TabsList className="grid w-full grid-cols-4 md:grid-cols-5 bg-white/70 backdrop-blur-sm border border-slate-200">
           <TabsTrigger 
             value="upload" 
             className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
           >
             <FileText className="w-4 h-4" />
-            PDF Upload
+            <span className="hidden sm:inline">PDF Upload</span>
+            <span className="sm:hidden">PDF</span>
           </TabsTrigger>
           <TabsTrigger 
             value="archetypes"
@@ -76,7 +117,8 @@ export const BookAnalyzer = () => {
             className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
           >
             <Users className="w-4 h-4" />
-            Leser-Archetypen
+            <span className="hidden sm:inline">Leser-Archetypen</span>
+            <span className="sm:hidden">Leser</span>
           </TabsTrigger>
           <TabsTrigger 
             value="analysis"
@@ -84,7 +126,8 @@ export const BookAnalyzer = () => {
             className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
           >
             <TrendingUp className="w-4 h-4" />
-            Analyse
+            <span className="hidden sm:inline">Analyse</span>
+            <span className="sm:hidden">Analyse</span>
           </TabsTrigger>
           <TabsTrigger 
             value="results"
@@ -92,7 +135,16 @@ export const BookAnalyzer = () => {
             className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
           >
             <BarChart3 className="w-4 h-4" />
-            Ergebnisse
+            <span className="hidden sm:inline">Ergebnisse</span>
+            <span className="sm:hidden">Ergebnisse</span>
+          </TabsTrigger>
+          <TabsTrigger 
+            value="settings"
+            className="hidden md:flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white"
+          >
+            <Settings className="w-4 h-4" />
+            <span className="hidden sm:inline">Einstellungen</span>
+            <span className="sm:hidden">Options</span>
           </TabsTrigger>
         </TabsList>
 
@@ -113,10 +165,17 @@ export const BookAnalyzer = () => {
               <CardTitle className="text-2xl text-slate-800">Leser-Archetypen konfigurieren</CardTitle>
             </CardHeader>
             <CardContent>
-              <ArchetypeManager 
-                onArchetypesReady={handleArchetypesReady}
-                textPreview={pdfContent.substring(0, 500) + '...'}
-              />
+              {advancedMode ? (
+                <AdvancedArchetypeManager 
+                  onArchetypesReady={handleArchetypesReady}
+                  textPreview={pdfContent.substring(0, 500) + '...'}
+                />
+              ) : (
+                <ArchetypeManager 
+                  onArchetypesReady={handleArchetypesReady}
+                  textPreview={pdfContent.substring(0, 500) + '...'}
+                />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -141,9 +200,22 @@ export const BookAnalyzer = () => {
         <TabsContent value="results" className="space-y-6">
           <ResultsDashboard 
             results={analysisResults}
+            streamOfThoughtResults={streamOfThoughtResults}
+            analyticalInsights={analyticalInsights}
             archetypes={archetypes}
             textLength={pdfContent.length}
           />
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-6">
+          <Card className="bg-white/70 backdrop-blur-sm border-slate-200">
+            <CardHeader>
+              <CardTitle className="text-2xl text-slate-800">Erweiterte Einstellungen</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AdvancedPromptEditor onPromptsChanged={() => {}} />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

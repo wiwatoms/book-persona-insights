@@ -5,9 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ReaderArchetype, AnalysisResult } from './BookAnalyzer';
 import { AIAnalysisService, AIConfig } from './AIAnalysisService';
-import { AnalysisController, AnalysisProgress as AnalysisProgressType } from './AnalysisEngine';
+import { BackgroundJobManager } from '../utils/backgroundProcessing';
 import { AnalysisProgressDisplay } from './AnalysisProgressDisplay';
-import { Play, Pause, RotateCcw, AlertCircle } from 'lucide-react';
+import { AdvancedArchetypeManager } from './AdvancedArchetypeManager';
+import { AdvancedPromptEditor } from './AdvancedPromptEditor';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Play, Pause, RotateCcw, AlertCircle, Settings, Users, Code } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface AnalysisProgressProps {
@@ -20,24 +23,67 @@ interface AnalysisProgressProps {
 
 export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
   pdfContent,
-  archetypes,
+  archetypes: initialArchetypes,
   onAnalysisComplete,
   isAnalyzing,
   setIsAnalyzing
 }) => {
   const [aiConfig, setAIConfig] = useState<AIConfig | null>(null);
-  const [progress, setProgress] = useState<AnalysisProgressType | null>(null);
-  const [analysisController] = useState(() => new AnalysisController());
+  const [archetypes, setArchetypes] = useState<ReaderArchetype[]>(initialArchetypes);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [backgroundJob, setBackgroundJob] = useState<any>(null);
+  const [customPrompts, setCustomPrompts] = useState<any[]>([]);
   const { toast } = useToast();
 
-  // Check for existing config on component mount
+  // Background job manager
+  const jobManager = BackgroundJobManager.getInstance();
+
   useEffect(() => {
+    // Load existing jobs on component mount
+    jobManager.loadJobsFromStorage();
+    
+    // Check for existing config
     const savedApiKey = localStorage.getItem('openai_api_key');
     const savedModel = localStorage.getItem('openai_model');
     if (savedApiKey && savedModel) {
       setAIConfig({ apiKey: savedApiKey, model: savedModel });
     }
-  }, []);
+
+    // Poll for job updates
+    const pollInterval = setInterval(() => {
+      if (currentJobId) {
+        const job = jobManager.getJob(currentJobId);
+        if (job) {
+          setBackgroundJob(job);
+          
+          if (job.status === 'complete') {
+            setIsAnalyzing(false);
+            onAnalysisComplete(job.results || []);
+            setCurrentJobId(null);
+            toast({
+              title: "Analyse abgeschlossen",
+              description: `${job.results?.length || 0} Bewertungen erstellt`,
+            });
+          } else if (job.status === 'failed') {
+            setIsAnalyzing(false);
+            setCurrentJobId(null);
+            toast({
+              title: "Analyse-Fehler",
+              description: job.error || 'Unbekannter Fehler',
+              variant: "destructive",
+            });
+          }
+        }
+      }
+    }, 1000);
+    
+    return () => clearInterval(pollInterval);
+  }, [currentJobId]);
+
+  useEffect(() => {
+    // Update archetypes when initialArchetypes changes
+    setArchetypes(initialArchetypes);
+  }, [initialArchetypes]);
 
   const validateInputs = (): string | null => {
     if (!aiConfig) return 'AI-Konfiguration fehlt';
@@ -58,46 +104,34 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
     }
 
     setIsAnalyzing(true);
-    setProgress(null);
     
-    try {
-      const results = await analysisController.runAnalysis(
-        pdfContent,
-        archetypes,
-        aiConfig!,
-        (progressUpdate) => {
-          setProgress(progressUpdate);
-        }
-      );
-      
-      if (results.length > 0) {
-        onAnalysisComplete(results);
-        toast({
-          title: "Analyse abgeschlossen",
-          description: `${results.length} Bewertungen erstellt`,
-        });
-      } else {
-        toast({
-          title: "Keine Ergebnisse",
-          description: "Die Analyse konnte keine Ergebnisse generieren",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unbekannter Fehler';
-      toast({
-        title: "Analyse-Fehler",
-        description: errorMsg,
-        variant: "destructive",
-      });
-    } finally {
-      setIsAnalyzing(false);
-    }
+    // Create a background job
+    const jobId = jobManager.createJob('analysis', {
+      pdfContent,
+      archetypes,
+      aiConfig: aiConfig!,
+      prompts: customPrompts.length > 0 ? customPrompts : undefined
+    });
+    
+    setCurrentJobId(jobId);
+    
+    toast({
+      title: "Analyse gestartet",
+      description: "Die Analyse läuft im Hintergrund und wird auch fortgesetzt, wenn Sie das Browser-Fenster schließen.",
+    });
   };
 
   const stopAnalysis = () => {
-    analysisController.stop();
+    if (currentJobId) {
+      const job = jobManager.getJob(currentJobId);
+      if (job) {
+        jobManager.updateJobStatus(currentJobId, 'failed', undefined, 'Vom Benutzer abgebrochen');
+      }
+    }
+    
     setIsAnalyzing(false);
+    setCurrentJobId(null);
+    
     toast({
       title: "Analyse gestoppt",
       description: "Die Analyse wurde vom Benutzer abgebrochen",
@@ -105,13 +139,21 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
   };
 
   const resetAnalysis = () => {
-    analysisController.stop();
-    setIsAnalyzing(false);
-    setProgress(null);
+    stopAnalysis();
+    setBackgroundJob(null);
+    
     toast({
       title: "Analyse zurückgesetzt",
       description: "Bereit für eine neue Analyse",
     });
+  };
+
+  const handleArchetypesUpdated = (newArchetypes: ReaderArchetype[]) => {
+    setArchetypes(newArchetypes);
+  };
+
+  const handlePromptsUpdated = (newPrompts: any[]) => {
+    setCustomPrompts(newPrompts);
   };
 
   // Show AI config if not configured
@@ -120,69 +162,123 @@ export const AnalysisProgress: React.FC<AnalysisProgressProps> = ({
   }
 
   const inputError = validateInputs();
+  const progressData = backgroundJob?.progress ? {
+    currentStep: Math.round((backgroundJob.progress / 100) * (archetypes.length * 10)), // Approximate
+    totalSteps: archetypes.length * 10, // Approximate
+    currentArchetype: backgroundJob.data?.archetypes[0]?.name || '',
+    currentChunk: 1,
+    totalChunks: 10, // Approximate
+    status: backgroundJob.status === 'running' 
+      ? `Analyse läuft: ${backgroundJob.progress.toFixed(0)}% abgeschlossen` 
+      : `${backgroundJob.status}`,
+    results: backgroundJob.results || [],
+    apiCalls: backgroundJob.results?.length || 0,
+    tokenUsage: { prompt: 0, completion: 0 } // Not tracked in background job
+  } : null;
 
   return (
     <div className="space-y-6">
-      {/* Input Validation Error */}
-      {inputError && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{inputError}</AlertDescription>
-        </Alert>
-      )}
+      <Tabs defaultValue="status" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="status" className="flex items-center gap-2">
+            <Play className="w-4 h-4" />
+            Analyse-Status
+          </TabsTrigger>
+          <TabsTrigger value="archetypes" className="flex items-center gap-2">
+            <Users className="w-4 h-4" />
+            Erweiterte Archetypen
+          </TabsTrigger>
+          <TabsTrigger value="settings" className="flex items-center gap-2">
+            <Code className="w-4 h-4" />
+            Prompt-Editor
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Progress Display */}
-      {progress && (
-        <AnalysisProgressDisplay 
-          progress={progress} 
-          archetypes={archetypes}
-        />
-      )}
+        <TabsContent value="status" className="space-y-6">
+          {/* Input Validation Error */}
+          {inputError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{inputError}</AlertDescription>
+            </Alert>
+          )}
 
-      {/* Control Buttons */}
-      <div className="flex justify-center gap-4">
-        {!isAnalyzing && !progress && (
-          <Button 
-            onClick={startAnalysis} 
-            size="lg" 
-            className="bg-green-600 hover:bg-green-700"
-            disabled={!!inputError}
-          >
-            <Play className="w-5 h-5 mr-2" />
-            Analyse starten
-          </Button>
-        )}
+          {/* Progress Display */}
+          {backgroundJob && progressData && (
+            <AnalysisProgressDisplay 
+              progress={progressData} 
+              archetypes={archetypes}
+            />
+          )}
 
-        {isAnalyzing && (
-          <Button onClick={stopAnalysis} size="lg" variant="outline">
-            <Pause className="w-5 h-5 mr-2" />
-            Stoppen
-          </Button>
-        )}
+          {/* Control Buttons */}
+          <div className="flex justify-center gap-4">
+            {!isAnalyzing && !backgroundJob && (
+              <Button 
+                onClick={startAnalysis} 
+                size="lg" 
+                className="bg-green-600 hover:bg-green-700"
+                disabled={!!inputError}
+              >
+                <Play className="w-5 h-5 mr-2" />
+                Analyse starten
+              </Button>
+            )}
 
-        {(progress || !isAnalyzing) && (
-          <Button onClick={resetAnalysis} size="lg" variant="outline">
-            <RotateCcw className="w-5 h-5 mr-2" />
-            Zurücksetzen
-          </Button>
-        )}
-      </div>
+            {isAnalyzing && (
+              <Button onClick={stopAnalysis} size="lg" variant="outline">
+                <Pause className="w-5 h-5 mr-2" />
+                Stoppen
+              </Button>
+            )}
 
-      {/* Analysis Info */}
-      {!progress && !inputError && (
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="pt-6">
-            <div className="text-center space-y-2">
-              <div className="text-lg font-medium text-blue-800">
-                Bereit für Analyse
-              </div>
-              <div className="text-sm text-blue-600">
-                {archetypes.length} Archetypen × {Math.ceil(pdfContent.split(/\s+/).length / 400)} Abschnitte = {archetypes.length * Math.ceil(pdfContent.split(/\s+/).length / 400)} Analysen
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            {(backgroundJob || !isAnalyzing) && (
+              <Button onClick={resetAnalysis} size="lg" variant="outline">
+                <RotateCcw className="w-5 h-5 mr-2" />
+                Zurücksetzen
+              </Button>
+            )}
+          </div>
+
+          {/* Analysis Info */}
+          {!backgroundJob && !inputError && (
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="pt-6">
+                <div className="text-center space-y-2">
+                  <div className="text-lg font-medium text-blue-800">
+                    Bereit für Analyse
+                  </div>
+                  <div className="text-sm text-blue-600">
+                    {archetypes.length} Archetypen × {Math.ceil(pdfContent.split(/\s+/).length / 400)} Abschnitte = {archetypes.length * Math.ceil(pdfContent.split(/\s+/).length / 400)} Analysen
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="archetypes" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="w-5 h-5" />
+                Archetypen konfigurieren
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AdvancedArchetypeManager
+                onArchetypesReady={handleArchetypesUpdated}
+                textPreview={pdfContent.substring(0, 500) + '...'}
+                initialArchetypes={archetypes}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-4">
+          <AdvancedPromptEditor onPromptsChanged={handlePromptsUpdated} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
