@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { ReaderArchetype, AnalysisResult } from './BookAnalyzer';
 import { AIConfig } from './AIAnalysisService';
@@ -52,8 +53,15 @@ export class AnalysisController {
     const chunkingSummary = TextChunker.getChunkingSummary(chunks);
     console.log('Chunking summary:', chunkingSummary);
     
-    const totalSteps = archetypes.length * chunks.length;
-    
+    const allTasks = archetypes.flatMap(archetype => 
+        chunks.map((chunk, chunkIndex) => ({
+            archetype,
+            chunk,
+            chunkIndex
+        }))
+    );
+
+    const totalSteps = allTasks.length;
     let currentStep = 0;
     
     onProgress({
@@ -68,91 +76,71 @@ export class AnalysisController {
       tokenUsage,
       chunkingSummary
     });
+    
+    const batchSize = 5; // Process 5 API calls in parallel
 
-    for (let archetypeIndex = 0; archetypeIndex < archetypes.length && !this.shouldStop; archetypeIndex++) {
-      const archetype = archetypes[archetypeIndex];
-      
-      onProgress({
-        currentStep,
-        totalSteps,
-        currentArchetype: archetype.name,
-        currentChunk: 0,
-        totalChunks: chunks.length,
-        status: `Analysiere "${archetype.name}"`,
-        results: [...results],
-        apiCalls,
-        tokenUsage,
-        chunkingSummary
-      });
+    for (let i = 0; i < allTasks.length; i += batchSize) {
+        if(this.shouldStop) break;
 
-      for (let chunkIndex = 0; chunkIndex < chunks.length && !this.shouldStop; chunkIndex++) {
-        currentStep++;
-        const chunk = chunks[chunkIndex];
-        
-        const chunkDescription = chunk.title ? 
-          `"${chunk.title}" (${chunk.wordCount} Wörter)` : 
-          `Abschnitt ${chunkIndex + 1} (${chunk.wordCount} Wörter)`;
-        
-        onProgress({
-          currentStep,
-          totalSteps,
-          currentArchetype: archetype.name,
-          currentChunk: chunkIndex + 1,
-          totalChunks: chunks.length,
-          status: `${archetype.name}: ${chunkDescription}`,
-          results: [...results],
-          apiCalls,
-          tokenUsage,
-          chunkingSummary
+        const batch = allTasks.slice(i, i + batchSize);
+
+        const promises = batch.map(async (task) => {
+            try {
+                const result = await this.callOpenAI(task.archetype, task.chunk.content, task.chunkIndex, aiConfig);
+                return { ...result, archetype: task.archetype, chunk: task.chunk, chunkIndex: task.chunkIndex };
+            } catch (error) {
+                console.error(`Error analyzing chunk ${task.chunkIndex} for ${task.archetype.name}:`, error);
+                return { error, archetype: task.archetype, chunk: task.chunk, chunkIndex: task.chunkIndex }; // Pass error along
+            }
         });
+        
+        const batchResults = await Promise.all(promises);
 
-        try {
-          const result = await this.callOpenAI(archetype, chunk.content, chunkIndex, aiConfig);
-          results.push(result);
-          apiCalls++;
-          
-          // Update token usage if available
-          if (result.tokenUsage) {
-            tokenUsage.prompt += result.tokenUsage.prompt;
-            tokenUsage.completion += result.tokenUsage.completion;
-          }
-          
-          onProgress({
-            currentStep,
-            totalSteps,
-            currentArchetype: archetype.name,
-            currentChunk: chunkIndex + 1,
-            totalChunks: chunks.length,
-            status: `✅ ${chunkDescription} analysiert (${result.overallRating.toFixed(1)}/10)`,
-            results: [...results],
-            apiCalls,
-            tokenUsage,
-            chunkingSummary
-          });
-          
-          // Small delay to prevent rate limiting
-          await new Promise(resolve => setTimeout(resolve, 200));
-          
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : 'Unbekannter Fehler';
-          
-          onProgress({
-            currentStep,
-            totalSteps,
-            currentArchetype: archetype.name,
-            currentChunk: chunkIndex + 1,
-            totalChunks: chunks.length,
-            status: `⚠️ Fehler bei ${chunkDescription}: ${errorMsg}`,
-            results: [...results],
-            apiCalls,
-            tokenUsage,
-            chunkingSummary
-          });
-          
-          // Continue with next chunk instead of stopping
-          continue;
+        for (const result of batchResults) {
+            if (this.shouldStop) break;
+
+            currentStep++;
+            const chunkDescription = result.chunk.title ? `"${result.chunk.title}" (${result.chunk.wordCount} Wörter)` : `Abschnitt ${result.chunkIndex + 1} (${result.chunk.wordCount} Wörter)`;
+
+            if ('error' in result) {
+                 onProgress({
+                    currentStep,
+                    totalSteps,
+                    currentArchetype: result.archetype.name,
+                    currentChunk: result.chunkIndex + 1,
+                    totalChunks: chunks.length,
+                    status: `⚠️ Fehler bei ${chunkDescription}`,
+                    results: [...results],
+                    apiCalls,
+                    tokenUsage,
+                    chunkingSummary
+                });
+            } else {
+                results.push(result);
+                apiCalls++;
+                if (result.tokenUsage) {
+                    tokenUsage.prompt += result.tokenUsage.prompt;
+                    tokenUsage.completion += result.tokenUsage.completion;
+                }
+                onProgress({
+                    currentStep,
+                    totalSteps,
+                    currentArchetype: result.archetype.name,
+                    currentChunk: result.chunkIndex + 1,
+                    totalChunks: chunks.length,
+                    status: `✅ ${result.archetype.name}: ${chunkDescription} analysiert (${result.overallRating.toFixed(1)}/10)`,
+                    results: [...results],
+                    apiCalls,
+                    tokenUsage,
+                    chunkingSummary
+                });
+            }
         }
-      }
+
+         // Small delay between batches to prevent rate limiting
+        if (i + batchSize < allTasks.length && !this.shouldStop) {
+          await new Promise(resolve => setTimeout(resolve, 200)); 
+        }
     }
     
     this.isRunning = false;

@@ -1,3 +1,4 @@
+
 import { AIConfig } from '../AIAnalysisService';
 import { BookContext, MarketPosition, TrendAnalysis, ReaderPersona } from './types';
 
@@ -7,6 +8,12 @@ export class MarketValidationAI {
     aiConfig: AIConfig,
     maxTokens: number = 1500
   ): Promise<any> {
+    console.log('Making OpenAI API call with config:', { model: aiConfig.model, hasKey: !!aiConfig.apiKey });
+    
+    if (!aiConfig.apiKey || aiConfig.apiKey === 'dummy-key') {
+      throw new Error('Bitte konfigurieren Sie Ihren OpenAI API-Schlüssel in den Einstellungen.');
+    }
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -31,7 +38,9 @@ export class MarketValidationAI {
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API Error ${response.status}`);
+      const errorText = await response.text();
+      console.error('OpenAI API Error:', response.status, errorText);
+      throw new Error(`OpenAI API Error ${response.status}: ${errorText}`);
     }
 
     const data = await response.json();
@@ -39,19 +48,22 @@ export class MarketValidationAI {
     
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      console.error('No valid JSON found in response:', content);
       throw new Error('Keine gültige JSON-Antwort erhalten');
     }
 
-    return JSON.parse(jsonMatch[0]);
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError, 'Content:', jsonMatch[0]);
+      throw new Error('Ungültige JSON-Antwort');
+    }
   }
 
-  static async processPrompt(prompt: string): Promise<string> {
-    // This is a simplified version for now - in a real implementation,
-    // you would need to get the AI config from somewhere
-    const aiConfig: AIConfig = {
-      apiKey: 'dummy-key', // This should come from user config
-      model: 'gpt-3.5-turbo'
-    };
+  static async processPrompt(prompt: string, aiConfig?: AIConfig): Promise<string> {
+    if (!aiConfig) {
+      throw new Error('AI-Konfiguration ist erforderlich. Bitte konfigurieren Sie Ihren OpenAI API-Schlüssel.');
+    }
 
     const result = await this.callOpenAI(prompt, aiConfig, 2000);
     return JSON.stringify(result);
@@ -59,14 +71,12 @@ export class MarketValidationAI {
 
   static async analyzeWithContext(
     prompt: string,
-    bookContext: BookContext
+    bookContext: BookContext,
+    aiConfig?: AIConfig
   ): Promise<string> {
-    // This is a simplified version for now - in a real implementation,
-    // you would need to get the AI config from somewhere
-    const aiConfig: AIConfig = {
-      apiKey: 'dummy-key', // This should come from user config
-      model: 'gpt-3.5-turbo'
-    };
+    if (!aiConfig) {
+      throw new Error('AI-Konfiguration ist erforderlich. Bitte konfigurieren Sie Ihren OpenAI API-Schlüssel.');
+    }
 
     const contextualPrompt = `
       ${prompt}
