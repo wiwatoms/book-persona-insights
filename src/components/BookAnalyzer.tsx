@@ -131,10 +131,12 @@ export const BookAnalyzer = () => {
             archetype,
             aiConfig,
             (progress) => setAnalysisProgress({
-              ...progress,
-              currentArchetype: archetype.name,
-              totalSteps: selectedArchetypes.length * progress.total,
               currentStep: (selectedArchetypes.indexOf(archetype) * progress.total) + progress.chunk,
+              totalSteps: selectedArchetypes.length * progress.total,
+              currentArchetype: archetype.name,
+              currentChunk: progress.chunk,
+              totalChunks: progress.total,
+              status: `${progress.step} - ${archetype.name}`,
               results: allResults,
               apiCalls: 0,
               tokenUsage: { prompt: 0, completion: 0 }
