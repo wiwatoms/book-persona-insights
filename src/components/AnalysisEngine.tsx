@@ -136,11 +136,6 @@ export class AnalysisController {
                 });
             }
         }
-
-         // Small delay between batches to prevent rate limiting
-        if (i + batchSize < allTasks.length && !this.shouldStop) {
-          await new Promise(resolve => setTimeout(resolve, 200)); 
-        }
     }
     
     this.isRunning = false;
@@ -239,24 +234,26 @@ PERSÖNLICHKEIT: ${archetype.personalityTraits.join(', ')}
 MOTIVATIONEN: ${archetype.motivations.join(', ')}
 PAIN POINTS: ${archetype.painPoints.join(', ')}
 
-Analysiere diesen Textabschnitt aus deiner Persona-Perspektive:
+Analysiere diesen spezifischen Textabschnitt aus deiner Persona-Perspektive:
 
 "${chunk}"
 
+Gib detailliertes, tiefgründiges Feedback, das sich NUR auf diesen Textabschnitt bezieht. Konzentriere dich auf deine emotionale Reaktion, wie die Charaktere oder die Handlung auf dich wirken und ob der Stil dich anspricht.
+
 Bewerte auf Skala 1-10 (Dezimalstellen erlaubt, z.B. 7.3):
-- Engagement: Wie fesselnd ist der Text?
-- Stil: Wie gefällt dir der Schreibstil?
-- Klarheit: Wie verständlich ist der Text?
-- Tempo: Wie ist das Erzähltempo?
-- Relevanz: Wie relevant ist der Inhalt für dich?
+- Engagement: Wie fesselnd ist DIESER ABSCHNITT?
+- Stil: Wie gefällt dir der Schreibstil IN DIESEM ABSCHNITT?
+- Klarheit: Wie verständlich ist der Text IN DIESEM ABSCHNITT?
+- Tempo: Wie ist das Erzähltempo IN DIESEM ABSCHNITT?
+- Relevanz: Wie relevant ist der Inhalt DIESES ABSCHNITTS für dich?
 
 Schätze (0-1 als Dezimalzahl, z.B. 0.75):
-- Kaufwahrscheinlichkeit: Würdest du das Buch kaufen?
-- Weiterempfehlungswahrscheinlichkeit: Würdest du es weiterempfehlen?
+- Kaufwahrscheinlichkeit: Basierend auf DIESEM ABSCHNITT, wie wahrscheinlich ist es, dass du das Buch kaufen würdest?
+- Weiterempfehlungswahrscheinlichkeit: Würdest du es basierend auf DIESEM ABSCHNITT weiterempfehlen?
 
-Review-Stimmung: positive, neutral oder negative
+Review-Stimmung (positive, neutral oder negative): Welche Stimmung hinterlässt DIESER ABSCHNITT bei dir?
 
-Gib 2-3 Marketing-Insights aus deiner Persona-Sicht.
+Gib 2-3 konkrete Marketing-Insights, die sich direkt aus deiner Reaktion auf DIESEN ABSCHNITT ableiten lassen.
 
 Antworte NUR in diesem JSON-Format:
 {
@@ -268,11 +265,11 @@ Antworte NUR in diesem JSON-Format:
     "relevance": 0.0
   },
   "overallRating": 0.0,
-  "feedback": "Dein detailliertes Feedback als Persona (max 150 Wörter)",
+  "feedback": "Dein detailliertes Feedback als Persona (max 150 Wörter), das sich spezifisch auf den Textabschnitt bezieht und deine emotionalen Reaktionen und Gedanken dazu beschreibt.",
   "buyingProbability": 0.0,
   "recommendationLikelihood": 0.0,
   "expectedReviewSentiment": "positive/neutral/negative",
-  "marketingInsights": ["Insight 1", "Insight 2"]
+  "marketingInsights": ["Konkreter Marketing-Insight 1 basierend auf diesem Abschnitt", "Konkreter Marketing-Insight 2 basierend auf diesem Abschnitt"]
 }`;
   }
 }

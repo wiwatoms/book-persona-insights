@@ -5,23 +5,27 @@ import { BookContext, MarketPosition, TrendAnalysis, ReaderPersona } from './typ
 export class MarketValidationAI {
   private static async callOpenAI(
     prompt: string,
-    aiConfig: AIConfig,
+    aiConfig?: AIConfig,
     maxTokens: number = 1500
   ): Promise<any> {
-    console.log('Making OpenAI API call with config:', { model: aiConfig.model, hasKey: !!aiConfig.apiKey });
+    // Get API key and model from localStorage if not provided in config
+    const apiKey = aiConfig?.apiKey || localStorage.getItem('openai_api_key');
+    const model = aiConfig?.model || localStorage.getItem('openai_model') || 'gpt-3.5-turbo';
     
-    if (!aiConfig.apiKey || aiConfig.apiKey === 'dummy-key') {
+    console.log('Making OpenAI API call with config:', { model, hasKey: !!apiKey });
+    
+    if (!apiKey || apiKey === 'dummy-key') {
       throw new Error('Bitte konfigurieren Sie Ihren OpenAI API-Schlüssel in den Einstellungen.');
     }
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${aiConfig.apiKey}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: aiConfig.model,
+        model,
         messages: [
           {
             role: 'system',
@@ -61,10 +65,6 @@ export class MarketValidationAI {
   }
 
   static async processPrompt(prompt: string, aiConfig?: AIConfig): Promise<string> {
-    if (!aiConfig) {
-      throw new Error('AI-Konfiguration ist erforderlich. Bitte konfigurieren Sie Ihren OpenAI API-Schlüssel.');
-    }
-
     const result = await this.callOpenAI(prompt, aiConfig, 2000);
     return JSON.stringify(result);
   }
@@ -74,10 +74,6 @@ export class MarketValidationAI {
     bookContext: BookContext,
     aiConfig?: AIConfig
   ): Promise<string> {
-    if (!aiConfig) {
-      throw new Error('AI-Konfiguration ist erforderlich. Bitte konfigurieren Sie Ihren OpenAI API-Schlüssel.');
-    }
-
     const contextualPrompt = `
       ${prompt}
       
@@ -92,7 +88,7 @@ export class MarketValidationAI {
     bookContext: BookContext,
     userGenres: string[],
     competitorTitles: string[],
-    aiConfig: AIConfig
+    aiConfig?: AIConfig
   ): Promise<{ marketPosition: MarketPosition; trendAnalysis: TrendAnalysis }> {
     const bookExcerpt = bookContext.content.substring(0, 3000);
     
@@ -152,7 +148,7 @@ Antworte in diesem JSON-Format:
   static async generateTargetPersonas(
     bookContext: BookContext,
     marketPosition: MarketPosition,
-    aiConfig: AIConfig
+    aiConfig?: AIConfig
   ): Promise<ReaderPersona[]> {
     const bookExcerpt = bookContext.content.substring(0, 3000);
     
