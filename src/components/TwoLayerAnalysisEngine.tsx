@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { ReaderArchetype, AnalysisResult } from './BookAnalyzer';
 import { AIConfig } from './AIAnalysisService';
@@ -62,7 +63,7 @@ export class TwoLayerAnalysisController {
     this.shouldStop = false;
 
     const chunks = TextChunker.createChunks(fileContent, {
-      maxWordsPerChunk: 300,
+      maxWordsPerChunk: 350,
       minWordsPerChunk: 100,
       preserveStructure: true
     });
@@ -85,7 +86,7 @@ export class TwoLayerAnalysisController {
       onProgress({ step: 'Korrelationsanalyse', chunk: i + 1, total: chunks.length });
       
       // Correlation Analysis
-      const layerCorrelation = await this.correlateLayersAnalysis(emotionalNotes, analyticalReview, aiConfig);
+      const layerCorrelation = await this.correlateLayersAnalysis(emotionalNotes, analyticalReview, chunk.content, aiConfig);
       
       // Generate basic analysis result
       const basicResult = await this.generateBasicAnalysis(chunk.content, archetype, i, aiConfig);
@@ -99,7 +100,7 @@ export class TwoLayerAnalysisController {
 
       // Small delay to prevent rate limiting
       if (i < chunks.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
     }
 
@@ -115,33 +116,40 @@ export class TwoLayerAnalysisController {
   ): Promise<EmotionalNote[]> {
     const prompt = `Du liest als ${archetype.name} diesen Textabschnitt und notierst deine unmittelbaren emotionalen Reaktionen:
 
-TEXT:
+DEINE PERSONA:
+- ${archetype.description}
+- Persönlichkeit: ${archetype.personalityTraits.join(', ')}
+- Motivationen: ${archetype.motivations.join(', ')}
+- Schmerzpunkte: ${archetype.painPoints.join(', ')}
+
+TEXT (lies aufmerksam und reagiere authentisch):
 "${chunk}"
 
-PERSONA: ${archetype.name}
-${archetype.description}
+AUFGABE: Dokumentiere 3-5 spontane emotionale Reaktionen während des Lesens. Denke daran, wie DU als diese spezifische Person reagieren würdest.
 
-Erstelle 2-4 emotionale Notizen während des Lesens. Für jede Notiz:
-- Welche Emotion fühlst du? (z.B. Spannung, Langeweile, Überraschung, Rührung)
-- Wie intensiv? (1-10)
-- Was denkst du in dem Moment?
-- Welche Textstelle löst das aus?
-- Persönliche Verbindung oder Erinnerung?
+Für jede Reaktion:
+- Welche Emotion löst dieser spezifische Moment aus? (z.B. "Spannung", "Langeweile", "Rührung", "Irritation", "Neugier")
+- Wie intensiv ist das Gefühl? (1-10)
+- Was denkst du in diesem Moment? (deine unmittelbaren Gedanken)
+- Welche konkrete Textstelle löst das aus? (Zitat)
+- Verbindung zu deinem Leben: Woran erinnert dich das? Was berührt dich persönlich?
 
-Antworte in JSON:
+Sei spezifisch und authentisch für deine Persona. Reagiere auf konkrete Details im Text.
+
+JSON-Format:
 {
   "notes": [
     {
-      "emotion": "Emotionsname",
+      "emotion": "Spezifische Emotion",
       "intensity": 7,
-      "reflection": "Was ich denke/fühle",
-      "keyMoment": "Spezifische Textstelle",
-      "personalConnection": "Persönliche Verbindung"
+      "reflection": "Meine konkreten Gedanken zu diesem Moment im Text",
+      "keyMoment": "Spezifisches Zitat oder Detail aus dem Text",
+      "personalConnection": "Wie das mit meinem Leben/meinen Erfahrungen zusammenhängt"
     }
   ]
 }`;
 
-    const response = await this.callOpenAI(prompt, aiConfig);
+    const response = await this.callOpenAI(prompt, aiConfig, 1200);
     return response.notes.map((note: any, index: number) => ({
       chunkIndex,
       timestamp: Date.now() + index,
@@ -156,38 +164,38 @@ Antworte in JSON:
     aiConfig: AIConfig
   ): Promise<AnalyticalReview> {
     const emotionalSummary = emotionalNotes.map(note => 
-      `${note.emotion} (${note.intensity}/10): ${note.reflection}`
+      `${note.emotion} (${note.intensity}/10) bei: "${note.keyMoment}" - ${note.reflection}`
     ).join('; ');
 
-    const prompt = `Analysiere diesen Textabschnitt literaturwissenschaftlich und berücksichtige dabei die emotionalen Reaktionen:
+    const prompt = `Analysiere diesen Textabschnitt professionell und berücksichtige die emotionalen Reaktionen:
 
 TEXT:
 "${chunk}"
 
-EMOTIONALE REAKTIONEN:
+EMOTIONALE REAKTIONEN DES LESERS:
 ${emotionalSummary}
 
-Bewerte objektiv (1-10):
+ANALYTISCHE BEWERTUNG (1-10):
 
 LITERARISCHE ELEMENTE:
-- Charakterentwicklung
-- Handlungsfortschritt  
-- Stilqualität
-- Themenexploration
+- Charakterentwicklung: Wie entwickeln sich die Charaktere in diesem Abschnitt?
+- Handlungsfortschritt: Wie trägt dieser Abschnitt zur Gesamthandlung bei?
+- Stilqualität: Wie ist die sprachliche Qualität und der Schreibstil?
+- Themenexploration: Wie werden Themen entwickelt oder vertieft?
 
 TECHNISCHE ASPEKTE:
-- Tempo/Rhythmus
-- Dialoge
-- Beschreibungen
-- Struktur
+- Tempo/Rhythmus: Wie ist das Erzähltempo in diesem Abschnitt?
+- Dialoge: Qualität und Natürlichkeit der Dialoge (falls vorhanden)
+- Beschreibungen: Qualität und Wirksamkeit der Beschreibungen
+- Struktur: Wie gut ist der Abschnitt strukturiert?
 
 MARKTFÄHIGKEIT:
-- Genre-Konventionen
-- Zielgruppenappeal
-- Einzigartigkeit
-- Kommerzielles Potenzial
+- Genre-Konventionen: Entspricht der Text den Erwartungen des Genres?
+- Zielgruppenappeal: Wie ansprechend ist der Text für die Zielgruppe?
+- Einzigartigkeit: Was macht diesen Abschnitt besonders/einzigartig?
+- Kommerzielles Potenzial: Verkaufsfähigkeit basierend auf diesem Abschnitt
 
-Gib detaillierte Analyse und 2-3 Verbesserungsvorschläge.
+Gib eine detaillierte Analyse (2-3 Sätze) und 2-3 konkrete Verbesserungsvorschläge.
 
 JSON-Format:
 {
@@ -209,11 +217,11 @@ JSON-Format:
     "uniqueness": 0,
     "commercialPotential": 0
   },
-  "detailedAnalysis": "Detaillierte Bewertung",
-  "improvementSuggestions": ["Vorschlag 1", "Vorschlag 2"]
+  "detailedAnalysis": "Professionelle Bewertung des Textabschnitts",
+  "improvementSuggestions": ["Konkreter Vorschlag 1", "Konkreter Vorschlag 2"]
 }`;
 
-    const response = await this.callOpenAI(prompt, aiConfig);
+    const response = await this.callOpenAI(prompt, aiConfig, 1500);
     return {
       chunkIndex,
       ...response
@@ -223,32 +231,44 @@ JSON-Format:
   private async correlateLayersAnalysis(
     emotionalNotes: EmotionalNote[],
     analyticalReview: AnalyticalReview,
+    chunk: string,
     aiConfig: AIConfig
   ): Promise<any> {
-    const prompt = `Korreliere die emotionale und analytische Bewertung:
+    const avgEmotionalIntensity = emotionalNotes.reduce((sum, note) => sum + note.intensity, 0) / emotionalNotes.length;
+    const avgAnalyticalScore = (
+      Object.values(analyticalReview.literaryElements).reduce((a, b) => a + b, 0) +
+      Object.values(analyticalReview.technicalAspects).reduce((a, b) => a + b, 0)
+    ) / 8;
+
+    const prompt = `Vergleiche die emotionale und analytische Bewertung dieses Textabschnitts:
+
+TEXT-ABSCHNITT:
+"${chunk.substring(0, 200)}..."
 
 EMOTIONALE REAKTIONEN:
-${emotionalNotes.map(note => `${note.emotion} (${note.intensity}/10)`).join(', ')}
+${emotionalNotes.map(note => `${note.emotion} (${note.intensity}/10): ${note.reflection}`).join('; ')}
+Durchschnittliche emotionale Intensität: ${avgEmotionalIntensity.toFixed(1)}/10
 
 ANALYTISCHE BEWERTUNG:
-Literarisch: ${Object.values(analyticalReview.literaryElements).reduce((a, b) => a + b, 0) / 4}/10
-Technisch: ${Object.values(analyticalReview.technicalAspects).reduce((a, b) => a + b, 0) / 4}/10
+Literarische Qualität: ${Object.values(analyticalReview.literaryElements).reduce((a, b) => a + b, 0) / 4}/10
+Technische Qualität: ${Object.values(analyticalReview.technicalAspects).reduce((a, b) => a + b, 0) / 4}/10
+Durchschnittliche analytische Bewertung: ${avgAnalyticalScore.toFixed(1)}/10
 
-Finde:
-- Emotionale Höhepunkte (hohe Intensität)
-- Analytische Stärken (hohe Bewertungen)
-- Diskrepanzen zwischen Emotion und Analyse
-- Synthese beider Ebenen
+KORRELATIONS-ANALYSE:
+1. Identifiziere emotionale Höhepunkte (Intensität >= 7)
+2. Identifiziere analytische Stärken (Bewertung >= 7)
+3. Finde Diskrepanzen zwischen emotionaler und analytischer Bewertung
+4. Erstelle eine Synthese, die beide Ebenen verbindet
 
-JSON:
+JSON-Format:
 {
   "emotionalHighs": [7, 8, 9],
   "analyticalStrengths": [8, 7, 9],
-  "discrepancies": ["Diskrepanz-Beschreibung"],
-  "synthesis": "Gesamtsynthese beider Analyseebenen"
+  "discrepancies": ["Beschreibung von Unterschieden zwischen emotionaler und analytischer Bewertung"],
+  "synthesis": "Verbindende Analyse beider Bewertungsebenen mit konkreten Erkenntnissen für Autoren und Marketing"
 }`;
 
-    return await this.callOpenAI(prompt, aiConfig);
+    return await this.callOpenAI(prompt, aiConfig, 1000);
   }
 
   private async generateBasicAnalysis(
@@ -257,13 +277,13 @@ JSON:
     chunkIndex: number,
     aiConfig: AIConfig
   ): Promise<AnalysisResult> {
-    const prompt = `Grundanalyse für ${archetype.name}:
+    const prompt = `Schnelle Bewertung für ${archetype.name}:
 
 "${chunk}"
 
-Bewerte 1-10: Engagement, Stil, Klarheit, Tempo, Relevanz
-Schätze 0-1: Kaufwahrscheinlichkeit, Weiterempfehlung
-Feedback (max 100 Wörter)
+Bewerte (1-10): Engagement, Stil, Klarheit, Tempo, Relevanz
+Schätze (0-1): Kaufwahrscheinlichkeit, Weiterempfehlung
+Kurzes Feedback (max 80 Wörter)
 
 JSON:
 {
@@ -275,14 +295,14 @@ JSON:
     "relevance": 0
   },
   "overallRating": 0,
-  "feedback": "Feedback",
+  "feedback": "Kurzes Feedback",
   "buyingProbability": 0,
   "recommendationLikelihood": 0,
   "expectedReviewSentiment": "positive",
   "marketingInsights": ["Insight"]
 }`;
 
-    const response = await this.callOpenAI(prompt, aiConfig);
+    const response = await this.callOpenAI(prompt, aiConfig, 800);
     return {
       archetypeId: archetype.id,
       chunkIndex,
@@ -290,26 +310,34 @@ JSON:
     };
   }
 
-  private async callOpenAI(prompt: string, aiConfig: AIConfig): Promise<any> {
+  private async callOpenAI(prompt: string, aiConfig: AIConfig, maxTokens: number = 1000): Promise<any> {
+    const apiKey = aiConfig.apiKey || localStorage.getItem('openai_api_key');
+    const model = aiConfig.model || localStorage.getItem('openai_model') || 'gpt-3.5-turbo';
+    
+    if (!apiKey || apiKey === 'dummy-key') {
+      throw new Error('OpenAI API-Schlüssel nicht konfiguriert');
+    }
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${aiConfig.apiKey}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: aiConfig.model,
+        model,
         messages: [
-          { role: 'system', content: 'Du bist ein Literaturexperte. Antworte nur in gültigem JSON.' },
+          { role: 'system', content: 'Du bist ein Literaturexperte. Antworte nur in gültigem JSON ohne zusätzlichen Text.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.4,
-        max_tokens: 1000,
+        max_tokens: maxTokens,
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API Error ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`OpenAI API Error ${response.status}: ${errorText}`);
     }
 
     const data = await response.json();
@@ -320,7 +348,12 @@ JSON:
       throw new Error('Keine gültige JSON-Antwort erhalten');
     }
 
-    return JSON.parse(jsonMatch[0]);
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError, 'Content:', jsonMatch[0]);
+      throw new Error('Ungültige JSON-Antwort');
+    }
   }
 
   stop(): void {

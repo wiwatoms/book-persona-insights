@@ -8,59 +8,84 @@ export class MarketValidationAI {
     aiConfig?: AIConfig,
     maxTokens: number = 1500
   ): Promise<any> {
-    // Get API key and model from localStorage if not provided in config
+    // Get API key and model from aiConfig first, then localStorage
     const apiKey = aiConfig?.apiKey || localStorage.getItem('openai_api_key');
-    const model = aiConfig?.model || localStorage.getItem('openai_model') || 'gpt-3.5-turbo';
+    const model = aiConfig?.model || localStorage.getItem('openai_model') || 'gpt-4o-mini';
     
-    console.log('Making OpenAI API call with config:', { model, hasKey: !!apiKey });
+    console.log('Market Validation API call:', { 
+      model, 
+      hasKey: !!apiKey,
+      keySource: aiConfig?.apiKey ? 'aiConfig' : 'localStorage'
+    });
     
     if (!apiKey || apiKey === 'dummy-key') {
-      throw new Error('Bitte konfigurieren Sie Ihren OpenAI API-Schlüssel in den Einstellungen.');
-    }
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content: 'Du bist ein Experte für Buchmarktanalyse und Verlagsstrategien. Antworte ausschließlich in gültigem JSON ohne zusätzlichen Text.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: maxTokens,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenAI API Error:', response.status, errorText);
-      throw new Error(`OpenAI API Error ${response.status}: ${errorText}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
-    
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('No valid JSON found in response:', content);
-      throw new Error('Keine gültige JSON-Antwort erhalten');
+      throw new Error('OpenAI API-Schlüssel nicht konfiguriert. Bitte konfigurieren Sie Ihren API-Schlüssel in den Einstellungen.');
     }
 
     try {
-      return JSON.parse(jsonMatch[0]);
-    } catch (parseError) {
-      console.error('JSON parsing error:', parseError, 'Content:', jsonMatch[0]);
-      throw new Error('Ungültige JSON-Antwort');
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content: 'Du bist ein Experte für Buchmarktanalyse und Verlagsstrategien. Antworte ausschließlich in gültigem JSON ohne zusätzlichen Text.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: maxTokens,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Market Validation OpenAI API Error:', response.status, errorText);
+        
+        if (response.status === 401) {
+          throw new Error('API-Schlüssel ungültig. Bitte überprüfen Sie Ihren OpenAI API-Schlüssel.');
+        } else if (response.status === 429) {
+          throw new Error('API-Ratenlimit erreicht. Bitte versuchen Sie es später erneut.');
+        } else {
+          throw new Error(`OpenAI API Fehler ${response.status}: ${errorText}`);
+        }
+      }
+
+      const data = await response.json();
+      
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        console.error('Unexpected API response structure:', data);
+        throw new Error('Unerwartete API-Antwort erhalten');
+      }
+      
+      const content = data.choices[0].message.content;
+      
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error('No valid JSON found in response:', content);
+        throw new Error('Keine gültige JSON-Antwort erhalten');
+      }
+
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (parseError) {
+        console.error('JSON parsing error:', parseError, 'Content:', jsonMatch[0]);
+        throw new Error('Ungültige JSON-Antwort: ' + parseError.message);
+      }
+    } catch (error) {
+      console.error('Market Validation API call failed:', error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Netzwerkfehler bei API-Aufruf');
     }
   }
 
@@ -77,7 +102,9 @@ export class MarketValidationAI {
     const contextualPrompt = `
       ${prompt}
       
-      Please analyze this in the context of the uploaded book.
+      Analysiere dies im Kontext des hochgeladenen Buches.
+      
+      Buchinhalt (Auszug): "${bookContext.content.substring(0, 1000)}..."
     `;
 
     const result = await this.callOpenAI(contextualPrompt, aiConfig, 2000);

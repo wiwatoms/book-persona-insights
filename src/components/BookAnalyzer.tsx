@@ -2,14 +2,18 @@ import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { FileUploader } from './FileUploader';
 import { ArchetypeManager } from './ArchetypeManager';
 import { AnalysisProgressDisplay } from './AnalysisProgressDisplay';
 import { ResultsDashboard } from './ResultsDashboard';
+import { TwoLayerResultsDashboard } from './TwoLayerResultsDashboard';
 import { MarketValidationSuite } from './MarketValidation/MarketValidationSuite';
 import { AIAnalysisService, AIConfig } from './AIAnalysisService';
 import { AnalysisController, AnalysisProgress } from './AnalysisEngine';
-import { AlertCircle, RotateCcw, BookOpen, TrendingUp } from 'lucide-react';
+import { TwoLayerAnalysisController, TwoLayerResult } from './TwoLayerAnalysisEngine';
+import { AlertCircle, RotateCcw, BookOpen, TrendingUp, Brain } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface ReaderArchetype {
@@ -76,9 +80,12 @@ export const BookAnalyzer = () => {
   const [archetypes, setArchetypes] = useState<ReaderArchetype[]>([]);
   const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
+  const [twoLayerResults, setTwoLayerResults] = useState<TwoLayerResult[]>([]);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [useTwoLayerAnalysis, setUseTwoLayerAnalysis] = useState<boolean>(false);
   
   const [analysisController] = useState(() => new AnalysisController());
+  const [twoLayerController] = useState(() => new TwoLayerAnalysisController());
 
   const handleConfigured = (config: AIConfig) => {
     setAiConfig(config);
@@ -99,35 +106,69 @@ export const BookAnalyzer = () => {
   };
 
   const startAnalysis = async (selectedArchetypes: ReaderArchetype[]) => {
-    if (!fileContent || !aiConfig || analysisController.isAnalysisRunning()) return;
+    if (!fileContent || !aiConfig) return;
+    
+    const activeController = useTwoLayerAnalysis ? twoLayerController : analysisController;
+    if (activeController.isAnalysisRunning()) return;
     
     setAnalysisError(null);
     setAnalysisResults([]);
+    setTwoLayerResults([]);
     setStep('analyzing');
-    toast.info("Analyse gestartet...", {
+    
+    const analysisType = useTwoLayerAnalysis ? "Zwei-Ebenen-Analyse" : "Standard-Analyse";
+    toast.info(`${analysisType} gestartet...`, {
       description: "Die Ergebnisse werden schrittweise angezeigt.",
     });
 
     try {
-      const results = await analysisController.runAnalysis(
-        fileContent,
-        selectedArchetypes,
-        aiConfig,
-        (progress) => setAnalysisProgress(progress)
-      );
-      setAnalysisResults(results);
+      if (useTwoLayerAnalysis) {
+        // Run two-layer analysis for each archetype
+        const allResults: TwoLayerResult[] = [];
+        for (const archetype of selectedArchetypes) {
+          const results = await twoLayerController.runTwoLayerAnalysis(
+            fileContent,
+            archetype,
+            aiConfig,
+            (progress) => setAnalysisProgress({
+              ...progress,
+              currentArchetype: archetype.name,
+              totalSteps: selectedArchetypes.length * progress.total,
+              currentStep: (selectedArchetypes.indexOf(archetype) * progress.total) + progress.chunk,
+              results: allResults,
+              apiCalls: 0,
+              tokenUsage: { prompt: 0, completion: 0 }
+            })
+          );
+          allResults.push(...results);
+        }
+        setTwoLayerResults(allResults);
+      } else {
+        const results = await analysisController.runAnalysis(
+          fileContent,
+          selectedArchetypes,
+          aiConfig,
+          (progress) => setAnalysisProgress(progress)
+        );
+        setAnalysisResults(results);
+      }
+      
       setStep('results');
-      toast.success("Analyse erfolgreich abgeschlossen!");
+      toast.success(`${analysisType} erfolgreich abgeschlossen!`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Ein unbekannter Fehler ist aufgetreten.";
       setAnalysisError(errorMessage);
       toast.error("Analyse fehlgeschlagen", { description: errorMessage });
-      setStep('archetypes'); // Return to the previous step
+      setStep('archetypes');
     }
   };
 
   const handleStopAnalysis = () => {
-    analysisController.stop();
+    if (useTwoLayerAnalysis) {
+      twoLayerController.stop();
+    } else {
+      analysisController.stop();
+    }
     setStep('archetypes');
     toast.warning("Analyse wurde manuell gestoppt.");
   };
@@ -138,6 +179,7 @@ export const BookAnalyzer = () => {
     setTextPreview('');
     setArchetypes([]);
     setAnalysisResults([]);
+    setTwoLayerResults([]);
     setAnalysisProgress(null);
     setAnalysisError(null);
   };
@@ -181,15 +223,46 @@ export const BookAnalyzer = () => {
         );
       case 'archetypes':
         return (
-          <Card>
-            <CardHeader><CardTitle>3. Leser-Archetypen bestätigen</CardTitle></CardHeader>
-            <CardContent><ArchetypeManager onArchetypesReady={handleArchetypesReady} textPreview={textPreview} /></CardContent>
-          </Card>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>3. Analyse-Modus wählen</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="analysis-mode"
+                    checked={useTwoLayerAnalysis}
+                    onCheckedChange={setUseTwoLayerAnalysis}
+                  />
+                  <Label htmlFor="analysis-mode" className="flex items-center gap-2">
+                    <Brain className="w-4 h-4" />
+                    Zwei-Ebenen-Analyse (Emotional + Analytisch)
+                  </Label>
+                </div>
+                <p className="text-sm text-gray-600">
+                  {useTwoLayerAnalysis 
+                    ? "Detaillierte Analyse mit emotionalen Reaktionen und analytischer Bewertung."
+                    : "Standard-Analyse mit Bewertungen und Feedback."
+                  }
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader><CardTitle>4. Leser-Archetypen bestätigen</CardTitle></CardHeader>
+              <CardContent><ArchetypeManager onArchetypesReady={handleArchetypesReady} textPreview={textPreview} /></CardContent>
+            </Card>
+          </div>
         );
       case 'analyzing':
         return (
           <Card>
-            <CardHeader><CardTitle>Analyse läuft...</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>
+                {useTwoLayerAnalysis ? "Zwei-Ebenen-Analyse läuft..." : "Analyse läuft..."}
+              </CardTitle>
+            </CardHeader>
             <CardContent>
               {analysisProgress && (
                 <AnalysisProgressDisplay progress={analysisProgress} archetypes={archetypes} />
@@ -216,7 +289,9 @@ export const BookAnalyzer = () => {
               <Card>
                 <CardHeader>
                   <div className="flex justify-between items-center">
-                    <CardTitle>Reader Analysis Results</CardTitle>
+                    <CardTitle>
+                      {useTwoLayerAnalysis ? "Zwei-Ebenen-Analyse Ergebnisse" : "Reader Analysis Results"}
+                    </CardTitle>
                     <Button onClick={handleRestart} variant="outline">
                       <RotateCcw className="w-4 h-4 mr-2" />
                       Neue Analyse
@@ -224,7 +299,11 @@ export const BookAnalyzer = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <ResultsDashboard results={{ analysis: aggregatedResults as any }} />
+                  {useTwoLayerAnalysis ? (
+                    <TwoLayerResultsDashboard results={twoLayerResults} archetypes={archetypes} />
+                  ) : (
+                    <ResultsDashboard results={{ analysis: aggregatedResults as any }} />
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
