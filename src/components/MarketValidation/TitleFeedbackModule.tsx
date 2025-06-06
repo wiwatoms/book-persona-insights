@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -86,14 +85,15 @@ export const TitleFeedbackModule: React.FC<TitleFeedbackModuleProps> = ({
 
     try {
       const selectedPersonaObjects = personas.filter(p => selectedPersonas.includes(p.id));
-      
-      // This would need actual AI configuration - for now using dummy config
-      const aiConfig = { apiKey: 'dummy', model: 'gpt-3.5-turbo' };
+      const aiConfig = { 
+        apiKey: localStorage.getItem('openai_api_key') || '', 
+        model: localStorage.getItem('openai_model') || 'gpt-4o-mini' 
+      };
       
       const results: TitleFeedback[] = [];
       
       for (const title of validTitles) {
-        const result = await simulateTitleFeedback(title, selectedPersonaObjects, bookContext, aiConfig);
+        const result = await analyzeTitleWithAI(title, selectedPersonaObjects, bookContext, aiConfig);
         results.push(result);
       }
       
@@ -101,39 +101,59 @@ export const TitleFeedbackModule: React.FC<TitleFeedbackModuleProps> = ({
       onComplete(results);
     } catch (error) {
       console.error('Title analysis error:', error);
-      setError('Fehler bei der Titel-Analyse. Bitte versuchen Sie es erneut.');
+      setError(`Fehler bei der Titel-Analyse: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const simulateTitleFeedback = async (
+  const analyzeTitleWithAI = async (
     title: string, 
     personas: ReaderPersona[], 
     bookContext: any,
     aiConfig: any
   ): Promise<TitleFeedback> => {
-    // Simulated feedback generation
-    const personaFeedback = personas.map(persona => ({
-      personaId: persona.id,
-      personaName: persona.name,
-      appealScore: Math.floor(Math.random() * 4) + 7, // 7-10 range
-      genreClarity: Math.floor(Math.random() * 3) + 7, // 7-9 range
-      memorability: Math.floor(Math.random() * 4) + 6, // 6-9 range
-      thematicFit: Math.floor(Math.random() * 3) + 7, // 7-9 range
-      comments: `Als ${persona.demographics.occupation} in der Altersgruppe ${persona.demographics.ageRange} finde ich den Titel "${title}" ${Math.random() > 0.5 ? 'ansprechend' : 'interessant'}. Er ${Math.random() > 0.5 ? 'weckt meine Neugier' : 'passt zu meinen Lesegewohnheiten'}.`,
-      positiveAssociations: ['Einprägsam', 'Passend zum Genre', 'Neugierig machend'].slice(0, Math.floor(Math.random() * 3) + 1),
-      concerns: Math.random() > 0.7 ? ['Könnte missverständlich sein'] : []
-    }));
+    const prompt = `Analysiere den Buchtitel "${title}" für verschiedene Leser-Personas basierend auf dem Buchinhalt:
 
-    const overallScore = personaFeedback.reduce((sum, pf) => sum + pf.appealScore, 0) / personaFeedback.length;
-    
-    return {
-      title,
-      personaFeedback,
-      overallScore,
-      summary: `Der Titel "${title}" erhielt eine durchschnittliche Bewertung von ${overallScore.toFixed(1)}/10. ${overallScore >= 8 ? 'Sehr positives Feedback von den Zielgruppen.' : overallScore >= 7 ? 'Gutes Feedback mit einigen Verbesserungsmöglichkeiten.' : 'Gemischtes Feedback, Überarbeitung empfohlen.'}`
-    };
+BUCHINHALT (Auszug): "${bookContext.content.substring(0, 2000)}..."
+
+PERSONAS:
+${personas.map(p => `
+- ${p.name}: ${p.demographics.ageRange}, ${p.demographics.occupation}
+  Lesegewohnheiten: ${p.readingHabits.favoriteGenres.join(', ')}
+  Motivationen: ${p.psychographics.motivations.join(', ')}
+`).join('\n')}
+
+Bewerte für jede Persona den Titel auf einer Skala von 1-10:
+- Anziehungskraft (appealScore)
+- Genre-Klarheit (genreClarity)  
+- Einprägsamkeit (memorability)
+- Thematische Passung (thematicFit)
+
+Gib auch Kommentare, positive Assoziationen und mögliche Bedenken an.
+
+Antworte in diesem JSON-Format:
+{
+  "title": "${title}",
+  "personaFeedback": [
+    {
+      "personaId": "persona_id",
+      "personaName": "Name",
+      "appealScore": 8,
+      "genreClarity": 7,
+      "memorability": 9,
+      "thematicFit": 8,
+      "comments": "Detailliertes Feedback...",
+      "positiveAssociations": ["Aspekt 1", "Aspekt 2"],
+      "concerns": ["Mögliche Bedenken"]
+    }
+  ],
+  "overallScore": 8.0,
+  "summary": "Zusammenfassung der Bewertung"
+}`;
+
+    const response = await MarketValidationAI.processPrompt(prompt, aiConfig);
+    return JSON.parse(response);
   };
 
   return (

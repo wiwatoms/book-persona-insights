@@ -1,6 +1,6 @@
-
 import { AIConfig } from '../AIAnalysisService';
 import { BookContext, MarketPosition, TrendAnalysis, ReaderPersona } from './types';
+import { RobustJSONParser } from '../../utils/jsonParser';
 
 export class MarketValidationAI {
   private static async callOpenAI(
@@ -8,7 +8,6 @@ export class MarketValidationAI {
     aiConfig?: AIConfig,
     maxTokens: number = 1500
   ): Promise<any> {
-    // Get API key and model from aiConfig first, then localStorage
     const apiKey = aiConfig?.apiKey || localStorage.getItem('openai_api_key');
     const model = aiConfig?.model || localStorage.getItem('openai_model') || 'gpt-4o-mini';
     
@@ -34,7 +33,7 @@ export class MarketValidationAI {
           messages: [
             {
               role: 'system',
-              content: 'Du bist ein Experte für Buchmarktanalyse und Verlagsstrategien. Antworte ausschließlich in gültigem JSON ohne zusätzlichen Text.'
+              content: 'Du bist ein Experte für Buchmarktanalyse und Verlagsstrategien. Antworte ausschließlich in gültigem JSON ohne zusätzlichen Text oder Erklärungen.'
             },
             {
               role: 'user',
@@ -68,18 +67,8 @@ export class MarketValidationAI {
       
       const content = data.choices[0].message.content;
       
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.error('No valid JSON found in response:', content);
-        throw new Error('Keine gültige JSON-Antwort erhalten');
-      }
-
-      try {
-        return JSON.parse(jsonMatch[0]);
-      } catch (parseError) {
-        console.error('JSON parsing error:', parseError, 'Content:', jsonMatch[0]);
-        throw new Error('Ungültige JSON-Antwort: ' + parseError.message);
-      }
+      // Use robust JSON parser instead of simple regex
+      return RobustJSONParser.parseAIResponse(content);
     } catch (error) {
       console.error('Market Validation API call failed:', error);
       if (error instanceof Error) {

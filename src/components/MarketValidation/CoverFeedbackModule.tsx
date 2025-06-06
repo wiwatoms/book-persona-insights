@@ -1,15 +1,14 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Plus, Play, Upload } from 'lucide-react';
+import { Trash2, Plus, Play } from 'lucide-react';
 import { ReaderPersona } from './types';
 import { useBookContext } from './BookContextProvider';
+import { MarketValidationAI } from './AIProcessor';
 
 interface CoverFeedbackModuleProps {
   personas: ReaderPersona[];
@@ -95,11 +94,15 @@ export const CoverFeedbackModule: React.FC<CoverFeedbackModuleProps> = ({
 
     try {
       const selectedPersonaObjects = personas.filter(p => selectedPersonas.includes(p.id));
+      const aiConfig = { 
+        apiKey: localStorage.getItem('openai_api_key') || '', 
+        model: localStorage.getItem('openai_model') || 'gpt-4o-mini' 
+      };
       
       const results: CoverFeedback[] = [];
       
       for (const concept of validConcepts) {
-        const result = await simulateCoverFeedback(concept, selectedPersonaObjects, bookContext);
+        const result = await analyzeCoverWithAI(concept, selectedPersonaObjects, bookContext, aiConfig);
         results.push(result);
       }
       
@@ -107,41 +110,61 @@ export const CoverFeedbackModule: React.FC<CoverFeedbackModuleProps> = ({
       onComplete(results);
     } catch (error) {
       console.error('Cover analysis error:', error);
-      setError('Fehler bei der Cover-Analyse. Bitte versuchen Sie es erneut.');
+      setError(`Fehler bei der Cover-Analyse: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const simulateCoverFeedback = async (
+  const analyzeCoverWithAI = async (
     concept: CoverConcept, 
     personas: ReaderPersona[], 
-    bookContext: any
+    bookContext: any,
+    aiConfig: any
   ): Promise<CoverFeedback> => {
-    // Simulated feedback generation
-    const emotions = ['Neugierig', 'Fasziniert', 'Gespannt', 'Begeistert', 'Interessiert', 'Nachdenklich'];
-    
-    const personaFeedback = personas.map(persona => ({
-      personaId: persona.id,
-      personaName: persona.name,
-      visualAppeal: Math.floor(Math.random() * 4) + 6, // 6-9 range
-      genreAppropriate: Math.floor(Math.random() * 3) + 7, // 7-9 range
-      thematicAccuracy: Math.floor(Math.random() * 4) + 6, // 6-9 range
-      standoutFactor: Math.floor(Math.random() * 4) + 6, // 6-9 range
-      emotionalResponse: emotions[Math.floor(Math.random() * emotions.length)],
-      comments: `Als ${persona.demographics.occupation} spricht mich das Cover-Design an. Es ${Math.random() > 0.5 ? 'vermittelt die richtige Stimmung' : 'passt gut zum Genre'} und würde mich zum Kauf animieren.`
-    }));
+    const prompt = `Analysiere das Cover-Konzept für verschiedene Leser-Personas basierend auf dem Buchinhalt:
 
-    const overallScore = personaFeedback.reduce((sum, pf) => 
-      sum + (pf.visualAppeal + pf.genreAppropriate + pf.thematicAccuracy + pf.standoutFactor) / 4, 0) / personaFeedback.length;
-    
-    return {
-      conceptId: concept.id,
-      conceptDescription: concept.description,
-      personaFeedback,
-      overallScore,
-      summary: `Das Cover-Konzept erhielt eine durchschnittliche Bewertung von ${overallScore.toFixed(1)}/10. ${overallScore >= 8 ? 'Sehr starkes visuelles Konzept.' : overallScore >= 7 ? 'Gutes Konzept mit Potenzial.' : 'Überarbeitung empfohlen.'}`
-    };
+BUCHINHALT (Auszug): "${bookContext.content.substring(0, 2000)}..."
+
+COVER-KONZEPT: "${concept.description}"
+
+PERSONAS:
+${personas.map(p => `
+- ${p.name}: ${p.demographics.ageRange}, ${p.demographics.occupation}
+  Lesegewohnheiten: ${p.readingHabits.favoriteGenres.join(', ')}
+  Motivationen: ${p.psychographics.motivations.join(', ')}
+`).join('\n')}
+
+Bewerte für jede Persona das Cover-Konzept auf einer Skala von 1-10:
+- Visueller Reiz (visualAppeal)
+- Genre-Angemessenheit (genreAppropriate)
+- Thematische Genauigkeit (thematicAccuracy)
+- Wiedererkennungsfaktor (standoutFactor)
+
+Gib auch emotionale Reaktionen und detaillierte Kommentare an.
+
+Antworte in diesem JSON-Format:
+{
+  "conceptId": "${concept.id}",
+  "conceptDescription": "${concept.description}",
+  "personaFeedback": [
+    {
+      "personaId": "persona_id",
+      "personaName": "Name",
+      "visualAppeal": 8,
+      "genreAppropriate": 7,
+      "thematicAccuracy": 9,
+      "standoutFactor": 8,
+      "emotionalResponse": "Neugierig",
+      "comments": "Detailliertes Feedback..."
+    }
+  ],
+  "overallScore": 8.0,
+  "summary": "Zusammenfassung der Cover-Bewertung"
+}`;
+
+    const response = await MarketValidationAI.processPrompt(prompt, aiConfig);
+    return JSON.parse(response);
   };
 
   return (

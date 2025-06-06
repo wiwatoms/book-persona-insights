@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,6 +15,7 @@ import { AnalysisController, AnalysisProgress } from './AnalysisEngine';
 import { TwoLayerAnalysisController, TwoLayerResult } from './TwoLayerAnalysisEngine';
 import { AlertCircle, RotateCcw, BookOpen, TrendingUp, Brain } from 'lucide-react';
 import { toast } from 'sonner';
+import { BackgroundJobManager } from '../utils/backgroundJobManager';
 
 export interface ReaderArchetype {
   id: string;
@@ -84,9 +84,104 @@ export const BookAnalyzer = () => {
   const [twoLayerResults, setTwoLayerResults] = useState<TwoLayerResult[]>([]);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [useTwoLayerAnalysis, setUseTwoLayerAnalysis] = useState<boolean>(false);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   
   const [analysisController] = useState(() => new AnalysisController());
   const [twoLayerController] = useState(() => new TwoLayerAnalysisController());
+  const [jobManager] = useState(() => BackgroundJobManager.getInstance());
+
+  // Set up background job monitoring
+  useEffect(() => {
+    if (!currentJobId) return;
+
+    const interval = setInterval(() => {
+      const job = jobManager.getJob(currentJobId);
+      if (job) {
+        setAnalysisProgress({
+          currentStep: job.completedSteps,
+          totalSteps: job.totalSteps,
+          currentArchetype: job.currentStep,
+          currentChunk: job.completedSteps,
+          totalChunks: job.totalSteps,
+          status: job.currentStep,
+          results: [],
+          apiCalls: 0,
+          tokenUsage: { prompt: 0, completion: 0 }
+        });
+
+        if (job.status === 'completed') {
+          if (useTwoLayerAnalysis) {
+            setTwoLayerResults(job.results);
+          } else {
+            setAnalysisResults(job.results);
+          }
+          setStep('results');
+          setCurrentJobId(null);
+          toast.success("Analyse erfolgreich abgeschlossen!");
+        } else if (job.status === 'failed') {
+          setAnalysisError(job.error || 'Unbekannter Fehler');
+          setStep('archetypes');
+          setCurrentJobId(null);
+          toast.error("Analyse fehlgeschlagen", { description: job.error });
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentJobId, useTwoLayerAnalysis, jobManager]);
+
+  // Register job handlers
+  useEffect(() => {
+    jobManager.registerJobHandler('analysis', async (job, data) => {
+      const { fileContent, archetypes, aiConfig, useTwoLayer } = data;
+      
+      if (useTwoLayer) {
+        jobManager.updateJob(job.id, {
+          totalSteps: archetypes.length * 10, // Estimate
+          currentStep: 'Starte Zwei-Ebenen-Analyse...'
+        });
+
+        const results = [];
+        for (let i = 0; i < archetypes.length; i++) {
+          const archetype = archetypes[i];
+          jobManager.updateJob(job.id, {
+            currentStep: `Analysiere ${archetype.name}...`,
+            completedSteps: i * 10
+          });
+
+          const archetypeResults = await twoLayerController.runTwoLayerAnalysis(
+            fileContent,
+            archetype,
+            aiConfig,
+            (progress) => {
+              jobManager.updateJob(job.id, {
+                currentStep: `${archetype.name}: ${progress.step}`,
+                completedSteps: (i * 10) + progress.chunk
+              });
+            }
+          );
+          results.push(...archetypeResults);
+        }
+        
+        jobManager.updateJob(job.id, { results, completedSteps: job.totalSteps });
+      } else {
+        const results = await analysisController.runAnalysis(
+          fileContent,
+          archetypes,
+          aiConfig,
+          (progress) => {
+            jobManager.updateJob(job.id, {
+              totalSteps: progress.totalSteps,
+              currentStep: progress.status,
+              completedSteps: progress.currentStep
+            });
+          }
+        );
+        
+        jobManager.updateJob(job.id, { results });
+      }
+    });
+  }, [jobManager, analysisController, twoLayerController]);
 
   const handleConfigured = (config: AIConfig) => {
     setAiConfig(config);
@@ -109,9 +204,6 @@ export const BookAnalyzer = () => {
   const startAnalysis = async (selectedArchetypes: ReaderArchetype[]) => {
     if (!fileContent || !aiConfig) return;
     
-    const activeController = useTwoLayerAnalysis ? twoLayerController : analysisController;
-    if (activeController.isAnalysisRunning()) return;
-    
     setAnalysisError(null);
     setAnalysisResults([]);
     setTwoLayerResults([]);
@@ -123,44 +215,14 @@ export const BookAnalyzer = () => {
     });
 
     try {
-      if (useTwoLayerAnalysis) {
-        // Run optimized two-layer analysis with parallel archetypen processing
-        const archetypePromises = selectedArchetypes.map(async (archetype) => {
-          console.log(`Starting two-layer analysis for archetype: ${archetype.name}`);
-          return await twoLayerController.runTwoLayerAnalysis(
-            fileContent,
-            archetype,
-            aiConfig,
-            (progress) => setAnalysisProgress({
-              currentStep: (selectedArchetypes.indexOf(archetype) * progress.total) + progress.chunk,
-              totalSteps: selectedArchetypes.length * progress.total,
-              currentArchetype: archetype.name,
-              currentChunk: progress.chunk,
-              totalChunks: progress.total,
-              status: `${progress.step} - ${archetype.name}`,
-              results: [],
-              apiCalls: 0,
-              tokenUsage: { prompt: 0, completion: 0 }
-            })
-          );
-        });
-        
-        const allResults = await Promise.all(archetypePromises);
-        const flatResults = allResults.flat();
-        setTwoLayerResults(flatResults);
-        console.log(`Two-layer analysis completed. Total results: ${flatResults.length}`);
-      } else {
-        const results = await analysisController.runAnalysis(
-          fileContent,
-          selectedArchetypes,
-          aiConfig,
-          (progress) => setAnalysisProgress(progress)
-        );
-        setAnalysisResults(results);
-      }
+      const jobId = jobManager.createJob('analysis', {
+        fileContent,
+        archetypes: selectedArchetypes,
+        aiConfig,
+        useTwoLayer: useTwoLayerAnalysis
+      });
       
-      setStep('results');
-      toast.success(`${analysisType} erfolgreich abgeschlossen!`);
+      setCurrentJobId(jobId);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Ein unbekannter Fehler ist aufgetreten.";
       console.error('Analysis failed:', error);
@@ -171,10 +233,15 @@ export const BookAnalyzer = () => {
   };
 
   const handleStopAnalysis = () => {
-    if (useTwoLayerAnalysis) {
-      twoLayerController.stop();
+    if (currentJobId) {
+      jobManager.stopJob(currentJobId);
+      setCurrentJobId(null);
     } else {
-      analysisController.stop();
+      if (useTwoLayerAnalysis) {
+        twoLayerController.stop();
+      } else {
+        analysisController.stop();
+      }
     }
     setStep('archetypes');
     toast.warning("Analyse wurde manuell gestoppt.");

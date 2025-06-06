@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Trash2, Plus, Play } from 'lucide-react';
 import { ReaderPersona } from './types';
 import { useBookContext } from './BookContextProvider';
+import { MarketValidationAI } from './AIProcessor';
 
 interface BlurbFeedbackModuleProps {
   personas: ReaderPersona[];
@@ -87,11 +87,15 @@ export const BlurbFeedbackModule: React.FC<BlurbFeedbackModuleProps> = ({
 
     try {
       const selectedPersonaObjects = personas.filter(p => selectedPersonas.includes(p.id));
+      const aiConfig = { 
+        apiKey: localStorage.getItem('openai_api_key') || '', 
+        model: localStorage.getItem('openai_model') || 'gpt-4o-mini' 
+      };
       
       const results: BlurbFeedback[] = [];
       
       for (let i = 0; i < validBlurbs.length; i++) {
-        const result = await simulateBlurbFeedback(validBlurbs[i], (i + 1).toString(), selectedPersonaObjects, bookContext);
+        const result = await analyzeBlurbWithAI(validBlurbs[i], (i + 1).toString(), selectedPersonaObjects, bookContext, aiConfig);
         results.push(result);
       }
       
@@ -99,67 +103,65 @@ export const BlurbFeedbackModule: React.FC<BlurbFeedbackModuleProps> = ({
       onComplete(results);
     } catch (error) {
       console.error('Blurb analysis error:', error);
-      setError('Fehler bei der Klappentext-Analyse. Bitte versuchen Sie es erneut.');
+      setError(`Fehler bei der Klappentext-Analyse: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const simulateBlurbFeedback = async (
+  const analyzeBlurbWithAI = async (
     blurbText: string, 
     blurbId: string,
     personas: ReaderPersona[], 
-    bookContext: any
+    bookContext: any,
+    aiConfig: any
   ): Promise<BlurbFeedback> => {
-    // Simulated feedback generation
-    const strengths = [
-      'Spannender Einstieg',
-      'Klare Charakterbeschreibung',
-      'Guter Hook',
-      'Passender Ton',
-      'Neugierig machend',
-      'Genre-typisch'
-    ];
-    
-    const weaknesses = [
-      'Zu viele Details',
-      'Unklarer Konflikt',
-      'Schwacher Schluss',
-      'Zu wenig Emotionen',
-      'Verwirrende Handlung'
-    ];
+    const prompt = `Analysiere den Klappentext für verschiedene Leser-Personas basierend auf dem Buchinhalt:
 
-    const personaFeedback = personas.map(persona => {
-      const clarityScore = Math.floor(Math.random() * 3) + 7; // 7-9
-      const intrigueScore = Math.floor(Math.random() * 4) + 6; // 6-9
-      const characterAppeal = Math.floor(Math.random() * 4) + 6; // 6-9
-      const paceConveyed = Math.floor(Math.random() * 3) + 7; // 7-9
-      const buyingIntent = Math.floor(Math.random() * 4) + 6; // 6-9
-      
-      return {
-        personaId: persona.id,
-        personaName: persona.name,
-        clarityScore,
-        intrigueScore,
-        characterAppeal,
-        paceConveyed,
-        buyingIntent,
-        comments: `Als ${persona.demographics.occupation} finde ich den Klappentext ${intrigueScore >= 8 ? 'sehr ansprechend' : intrigueScore >= 7 ? 'interessant' : 'okay'}. ${clarityScore >= 8 ? 'Die Handlung ist klar verständlich.' : 'Die Handlung könnte klarer sein.'} ${buyingIntent >= 8 ? 'Ich würde das Buch definitiv kaufen.' : buyingIntent >= 7 ? 'Das Buch interessiert mich.' : 'Ich bin noch unentschlossen.'}`,
-        strengths: strengths.slice(0, Math.floor(Math.random() * 3) + 2),
-        weaknesses: weaknesses.slice(0, Math.floor(Math.random() * 2))
-      };
-    });
+BUCHINHALT (Auszug): "${bookContext.content.substring(0, 2000)}..."
 
-    const overallScore = personaFeedback.reduce((sum, pf) => 
-      sum + (pf.clarityScore + pf.intrigueScore + pf.characterAppeal + pf.paceConveyed + pf.buyingIntent) / 5, 0) / personaFeedback.length;
-    
-    return {
-      blurbId,
-      blurbText,
-      personaFeedback,
-      overallScore,
-      summary: `Der Klappentext erhielt eine durchschnittliche Bewertung von ${overallScore.toFixed(1)}/10. ${overallScore >= 8 ? 'Sehr überzeugender Klappentext.' : overallScore >= 7 ? 'Guter Klappentext mit kleinen Optimierungen.' : 'Überarbeitung empfohlen für bessere Wirkung.'}`
-    };
+KLAPPENTEXT: "${blurbText}"
+
+PERSONAS:
+${personas.map(p => `
+- ${p.name}: ${p.demographics.ageRange}, ${p.demographics.occupation}
+  Lesegewohnheiten: ${p.readingHabits.favoriteGenres.join(', ')}
+  Motivationen: ${p.psychographics.motivations.join(', ')}
+`).join('\n')}
+
+Bewerte für jede Persona den Klappentext auf einer Skala von 1-10:
+- Klarheit (clarityScore)
+- Spannung/Neugier (intrigueScore)
+- Charakter-Anziehung (characterAppeal)
+- Tempo-Vermittlung (paceConveyed)
+- Kaufabsicht (buyingIntent)
+
+Gib auch Stärken, Schwächen und detaillierte Kommentare an.
+
+Antworte in diesem JSON-Format:
+{
+  "blurbId": "${blurbId}",
+  "blurbText": "${blurbText}",
+  "personaFeedback": [
+    {
+      "personaId": "persona_id",
+      "personaName": "Name",
+      "clarityScore": 8,
+      "intrigueScore": 7,
+      "characterAppeal": 9,
+      "paceConveyed": 8,
+      "buyingIntent": 8,
+      "comments": "Detailliertes Feedback...",
+      "strengths": ["Stärke 1", "Stärke 2"],
+      "weaknesses": ["Schwäche 1"]
+    }
+  ],
+  "overallScore": 8.0,
+  "summary": "Zusammenfassung der Klappentext-Bewertung"
+}`;
+
+    const response = await MarketValidationAI.processPrompt(prompt, aiConfig);
+    return JSON.parse(response);
   };
 
   return (
