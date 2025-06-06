@@ -69,38 +69,49 @@ export class TwoLayerAnalysisController {
     });
 
     const results: TwoLayerResult[] = [];
-
-    for (let i = 0; i < chunks.length && !this.shouldStop; i++) {
-      const chunk = chunks[i];
+    
+    // Optimized: Process chunks in batches of 3 for rate-limit safety
+    const batchSize = 3;
+    
+    for (let i = 0; i < chunks.length && !this.shouldStop; i += batchSize) {
+      const chunkBatch = chunks.slice(i, i + batchSize);
       
-      onProgress({ step: 'Emotionale Analyse', chunk: i + 1, total: chunks.length });
-      
-      // Layer 1: Emotional Stream Analysis
-      const emotionalNotes = await this.generateEmotionalNotes(chunk.content, archetype, i, aiConfig);
-      
-      onProgress({ step: 'Analytische Bewertung', chunk: i + 1, total: chunks.length });
-      
-      // Layer 2: Analytical Review
-      const analyticalReview = await this.generateAnalyticalReview(chunk.content, emotionalNotes, i, aiConfig);
-      
-      onProgress({ step: 'Korrelationsanalyse', chunk: i + 1, total: chunks.length });
-      
-      // Correlation Analysis
-      const layerCorrelation = await this.correlateLayersAnalysis(emotionalNotes, analyticalReview, chunk.content, aiConfig);
-      
-      // Generate basic analysis result
-      const basicResult = await this.generateBasicAnalysis(chunk.content, archetype, i, aiConfig);
-      
-      results.push({
-        ...basicResult,
-        emotionalNotes,
-        analyticalReview,
-        layerCorrelation
+      // Process batch in parallel
+      const batchPromises = chunkBatch.map(async (chunk, batchIndex) => {
+        const chunkIndex = i + batchIndex;
+        
+        onProgress({ step: 'Emotionale Analyse', chunk: chunkIndex + 1, total: chunks.length });
+        
+        // Layer 1: Emotional Stream Analysis
+        const emotionalNotes = await this.generateEmotionalNotes(chunk.content, archetype, chunkIndex, aiConfig);
+        
+        onProgress({ step: 'Analytische Bewertung', chunk: chunkIndex + 1, total: chunks.length });
+        
+        // Layer 2: Analytical Review
+        const analyticalReview = await this.generateAnalyticalReview(chunk.content, emotionalNotes, chunkIndex, aiConfig);
+        
+        // Basic analysis result
+        const basicResult = await this.generateBasicAnalysis(chunk.content, archetype, chunkIndex, aiConfig);
+        
+        onProgress({ step: 'Korrelationsanalyse', chunk: chunkIndex + 1, total: chunks.length });
+        
+        // Layer 3: Correlation Analysis (sequential, depends on previous layers)
+        const layerCorrelation = await this.correlateLayersAnalysis(emotionalNotes, analyticalReview, chunk.content, aiConfig);
+        
+        return {
+          ...basicResult,
+          emotionalNotes,
+          analyticalReview,
+          layerCorrelation
+        };
       });
-
-      // Small delay to prevent rate limiting
-      if (i < chunks.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+      
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
+      
+      // Small delay between batches to prevent rate limiting
+      if (i + batchSize < chunks.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
 
@@ -312,7 +323,9 @@ JSON:
 
   private async callOpenAI(prompt: string, aiConfig: AIConfig, maxTokens: number = 1000): Promise<any> {
     const apiKey = aiConfig.apiKey || localStorage.getItem('openai_api_key');
-    const model = aiConfig.model || localStorage.getItem('openai_model') || 'gpt-3.5-turbo';
+    const model = aiConfig.model || localStorage.getItem('openai_model') || 'gpt-4o-mini';
+    
+    console.log('TwoLayer API call:', { model, hasKey: !!apiKey, maxTokens, promptLength: prompt.length });
     
     if (!apiKey || apiKey === 'dummy-key') {
       throw new Error('OpenAI API-Schlüssel nicht konfiguriert');
@@ -337,21 +350,30 @@ JSON:
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('TwoLayer OpenAI API Error:', response.status, errorText);
       throw new Error(`OpenAI API Error ${response.status}: ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('TwoLayer API response:', { 
+      usage: data.usage, 
+      model: data.model,
+      promptTokens: data.usage?.prompt_tokens,
+      completionTokens: data.usage?.completion_tokens 
+    });
+    
     const content = data.choices[0].message.content;
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     
     if (!jsonMatch) {
+      console.error('No valid JSON in TwoLayer response:', content);
       throw new Error('Keine gültige JSON-Antwort erhalten');
     }
 
     try {
       return JSON.parse(jsonMatch[0]);
     } catch (parseError) {
-      console.error('JSON parsing error:', parseError, 'Content:', jsonMatch[0]);
+      console.error('TwoLayer JSON parsing error:', parseError, 'Content:', jsonMatch[0]);
       throw new Error('Ungültige JSON-Antwort');
     }
   }

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Eye, EyeOff, Key } from 'lucide-react';
+import { Eye, EyeOff, Key, Clipboard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface AIAnalysisServiceProps {
@@ -30,6 +30,31 @@ export const AIAnalysisService: React.FC<AIAnalysisServiceProps> = ({ onConfigur
   const [showApiKey, setShowApiKey] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const { toast } = useToast();
+
+  const pasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text.startsWith('sk-')) {
+        setApiKey(text);
+        toast({
+          title: "API-Key eingefügt",
+          description: "API-Key wurde aus der Zwischenablage eingefügt.",
+        });
+      } else {
+        toast({
+          title: "Ungültiger API-Key",
+          description: "Der eingefügte Text scheint kein gültiger OpenAI API-Key zu sein.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Fehler beim Einfügen",
+        description: "Zwischenablage konnte nicht gelesen werden. Stellen Sie sicher, dass Sie die Berechtigung erteilt haben.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const validateAndSave = async () => {
     if (!apiKey.trim()) {
@@ -148,17 +173,29 @@ export const AIAnalysisService: React.FC<AIAnalysisServiceProps> = ({ onConfigur
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="sk-..."
-                className="pr-10"
+                className="pr-20"
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3"
-                onClick={() => setShowApiKey(!showApiKey)}
-              >
-                {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
+              <div className="absolute right-0 top-0 h-full flex">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="px-2 h-full"
+                  onClick={pasteFromClipboard}
+                  title="Aus Zwischenablage einfügen"
+                >
+                  <Clipboard className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="px-2 h-full"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                >
+                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           </div>
 

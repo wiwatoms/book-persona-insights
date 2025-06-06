@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -123,10 +124,10 @@ export const BookAnalyzer = () => {
 
     try {
       if (useTwoLayerAnalysis) {
-        // Run two-layer analysis for each archetype
-        const allResults: TwoLayerResult[] = [];
-        for (const archetype of selectedArchetypes) {
-          const results = await twoLayerController.runTwoLayerAnalysis(
+        // Run optimized two-layer analysis with parallel archetypen processing
+        const archetypePromises = selectedArchetypes.map(async (archetype) => {
+          console.log(`Starting two-layer analysis for archetype: ${archetype.name}`);
+          return await twoLayerController.runTwoLayerAnalysis(
             fileContent,
             archetype,
             aiConfig,
@@ -137,14 +138,17 @@ export const BookAnalyzer = () => {
               currentChunk: progress.chunk,
               totalChunks: progress.total,
               status: `${progress.step} - ${archetype.name}`,
-              results: allResults,
+              results: [],
               apiCalls: 0,
               tokenUsage: { prompt: 0, completion: 0 }
             })
           );
-          allResults.push(...results);
-        }
-        setTwoLayerResults(allResults);
+        });
+        
+        const allResults = await Promise.all(archetypePromises);
+        const flatResults = allResults.flat();
+        setTwoLayerResults(flatResults);
+        console.log(`Two-layer analysis completed. Total results: ${flatResults.length}`);
       } else {
         const results = await analysisController.runAnalysis(
           fileContent,
@@ -159,6 +163,7 @@ export const BookAnalyzer = () => {
       toast.success(`${analysisType} erfolgreich abgeschlossen!`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Ein unbekannter Fehler ist aufgetreten.";
+      console.error('Analysis failed:', error);
       setAnalysisError(errorMessage);
       toast.error("Analyse fehlgeschlagen", { description: errorMessage });
       setStep('archetypes');
@@ -244,7 +249,7 @@ export const BookAnalyzer = () => {
                 </div>
                 <p className="text-sm text-gray-600">
                   {useTwoLayerAnalysis 
-                    ? "Detaillierte Analyse mit emotionalen Reaktionen und analytischer Bewertung."
+                    ? "Detaillierte Analyse mit emotionalen Reaktionen und analytischer Bewertung. Optimiert für Parallelverarbeitung."
                     : "Standard-Analyse mit Bewertungen und Feedback."
                   }
                 </p>
@@ -262,7 +267,7 @@ export const BookAnalyzer = () => {
           <Card>
             <CardHeader>
               <CardTitle>
-                {useTwoLayerAnalysis ? "Zwei-Ebenen-Analyse läuft..." : "Analyse läuft..."}
+                {useTwoLayerAnalysis ? "Optimierte Zwei-Ebenen-Analyse läuft..." : "Analyse läuft..."}
               </CardTitle>
             </CardHeader>
             <CardContent>
